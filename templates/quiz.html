@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Quiz</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🎓 Vocabulary Quiz</div>
+        <div class="nav-user">
+            <a href="/student/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="quizContainer">
+            <h1 id="quizTitle">Loading...</h1>
+            <p id="quizDescription"></p>
+            
+            <form id="quizForm">
+                <div id="questionsContainer"></div>
+                <button type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
+            </form>
+        </div>
+
+        <div id="resultsContainer" style="display: none;">
+            <h1>Quiz Results</h1>
+            <div class="results-box">
+                <h2>Your Score: <span id="finalScore"></span></h2>
+                <p id="finalPercentage"></p>
+                <a href="/student/dashboard" class="btn btn-primary">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const quizId = {{.QuizID}};
+        
+        async function loadQuiz() {
+            try {
+                const response = await fetch(`/student/api/quiz/${quizId}`);
+                const data = await response.json();
+                
+                document.getElementById('quizTitle').textContent = data.quiz.title;
+                document.getElementById('quizDescription').textContent = data.quiz.description;
+                
+                const container = document.getElementById('questionsContainer');
+                container.innerHTML = '';
+                
+                data.questions.forEach((q, index) => {
+                    const questionDiv = document.createElement('div');
+                    questionDiv.className = 'question-card';
+                    
+                    let typeLabel = '';
+                    if (q.question_type === 'meaning') typeLabel = '📖 Meaning';
+                    else if (q.question_type === 'synonym') typeLabel = '🔄 Synonym';
+                    else if (q.question_type === 'antonym') typeLabel = '↔️ Antonym';
+                    
+                    let optionsHTML = '';
+                    q.options.forEach(option => {
+                        optionsHTML += `
+                            <label class="option-label">
+                                <input type="radio" name="question_${q.id}" value="${option}" required>
+                                <span>${option}</span>
+                            </label>
+                        `;
+                    });
+                    
+                    questionDiv.innerHTML = `
+                        <div class="question-header">
+                            <span class="question-number">Question ${index + 1}</span>
+                            <span class="question-type">${typeLabel}</span>
+                            <span class="question-points">${q.points} point(s)</span>
+                        </div>
+                        <h3>${q.question_text}</h3>
+                        <div class="options-container">
+                            ${optionsHTML}
+                        </div>
+                    `;
+                    
+                    container.appendChild(questionDiv);
+                });
+            } catch (error) {
+                console.error('Error loading quiz:', error);
+                alert('Failed to load quiz');
+            }
+        }
+        
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const answers = {};
+            
+            for (let [key, value] of formData.entries()) {
+                const questionId = key.replace('question_', '');
+                answers[questionId] = value;
+            }
+            
+            try {
+                const response = await fetch(`/student/api/quiz/${quizId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ answers })
+                });
+                
+                const result = await response.json();
+                
+                document.getElementById('quizContainer').style.display = 'none';
+                document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('finalScore').textContent = 
+                    `${result.score} / ${result.max_score}`;
+                document.getElementById('finalPercentage').textContent = 
+                    `Percentage: ${result.percentage.toFixed(1)}%`;
+            } catch (error) {
+                console.error('Error

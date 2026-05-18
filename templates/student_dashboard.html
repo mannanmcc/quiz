@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🎓 Vocabulary Quiz</div>
+        <div class="nav-user">
+            <span>Welcome, {{.Username}}!</span>
+            <a href="/logout" class="btn btn-secondary">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Available Quizzes</h1>
+        
+        <div class="quiz-grid">
+            {{range .Quizzes}}
+            <div class="quiz-card">
+                <h3>{{.title}}</h3>
+                <p>{{.description}}</p>
+                <p class="quiz-date">Created: {{.created_at}}</p>
+                {{if .attempted}}
+                <span class="badge badge-success">Completed</span>
+                {{end}}
+                <a href="/student/quiz/{{.id}}" class="btn btn-primary">
+                    {{if .attempted}}View Again{{else}}Take Quiz{{end}}
+                </a>
+            </div>
+            {{end}}
+        </div>
+
+        <h2>Recent Attempts</h2>
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Quiz</th>
+                    <th>Score</th>
+                    <th>Percentage</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .RecentAttempts}}
+                <tr>
+                    <td>{{.title}}</td>
+                    <td>{{.score}}/{{.max_score}}</td>
+                    <td>{{printf "%.1f" .percentage}}%</td>
+                    <td>{{.completed_at}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
