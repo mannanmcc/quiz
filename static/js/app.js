@@ -252,3 +252,28 @@ async function loadResults(quizId) {
         alert('Failed to load results');
     }
 }
+
+async function resetQuiz(quizId) {
+    if (!confirm('Reset this quiz for all students? This will delete existing attempts and unlock the quiz.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}/reset`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to reset quiz: ' + error);
+            return;
+        }
+
+        const result = await response.json();
+        alert(`Quiz reset. Deleted attempts: ${result.deleted_attempts}`);
+        loadResults(quizId);
+    } catch (error) {
+        console.error('Error resetting quiz:', error);
+        alert('Failed to reset quiz');
+    }
+}

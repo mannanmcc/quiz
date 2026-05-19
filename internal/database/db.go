@@ -1,30 +1,31 @@
 package database
 
 import (
-    "database/sql"
-    "log"
-    _ "github.com/mattn/go-sqlite3"
+	"database/sql"
+	"log"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var DB *sql.DB
 
 func InitDB() error {
-    var err error
-    DB, err = sql.Open("sqlite3", "./vocabulary_quiz.db")
-    if err != nil {
-        return err
-    }
+	var err error
+	DB, err = sql.Open("sqlite3", "./vocabulary_quiz.db")
+	if err != nil {
+		return err
+	}
 
-    if err = DB.Ping(); err != nil {
-        return err
-    }
+	if err = DB.Ping(); err != nil {
+		return err
+	}
 
-    createTables()
-    return nil
+	createTables()
+	return nil
 }
 
 func createTables() {
-    schema := `
+	schema := `
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
@@ -79,35 +80,34 @@ func createTables() {
     );
     `
 
-    _, err := DB.Exec(schema)
-    if err != nil {
-        log.Fatal("Error creating tables:", err)
-    }
+	_, err := DB.Exec(schema)
+	if err != nil {
+		log.Fatal("Error creating tables:", err)
+	}
 
-    // Create default admin user
-    createDefaultAdmin()
+	// Create default admin user
+	createDefaultAdmin()
 }
 
 func createDefaultAdmin() {
-    var count int
-    DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
-    
-    if count == 0 {
-        hashedPassword, _ := hashPassword("admin123")
-        _, err := DB.Exec(`
+	var count int
+	DB.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin'").Scan(&count)
+
+	if count == 0 {
+		_, err := DB.Exec(`
             INSERT INTO users (username, password, role, full_name) 
-            VALUES (?, ?, ?, ?)`,
-            "admin", hashedPassword, "admin", "Administrator")
-        
-        if err != nil {
-            log.Println("Error creating admin:", err)
-        } else {
-            log.Println("Default admin created - username: admin, password: admin123")
-        }
-    }
+    VALUES (?, ?, ?, ?)`,
+			"admin", "admin123", "admin", "Administrator")
+
+		if err != nil {
+			log.Println("Error creating admin:", err)
+		} else {
+			log.Println("Default admin created - username: admin, password: admin123")
+		}
+	}
 }
 
 func hashPassword(password string) (string, error) {
-    // We'll implement this in the auth handler
-    return password, nil // Placeholder
+	// We'll implement this in the auth handler
+	return password, nil // Placeholder
 }
