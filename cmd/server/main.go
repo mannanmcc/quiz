@@ -47,6 +47,7 @@ func main() {
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.GetAdminQuizHandler).Methods("GET")
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.UpdateQuizHandler).Methods("PUT")
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}/results", handlers.GetStudentResultsHandler).Methods("GET")
+	adminRouter.HandleFunc("/api/quiz/{quiz_id}/progress", handlers.GetQuizProgressReportHandler).Methods("GET")
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}/reset", handlers.ResetQuizAttemptsHandler).Methods("POST")
 
 	// Static files

@@ -24,11 +24,13 @@
                 <h3>{{.title}}</h3>
                 <p>{{.description}}</p>
                 <p class="quiz-date">Created: {{.created_at}}</p>
-                {{if .attempted}}
-                <span class="badge badge-success">Completed</span>
+                {{if .attempts}}
+                <span class="badge badge-success">{{.attempts}} attempt(s)</span>
+                {{end}}
+                {{if .locked}}
                 <button class="btn btn-secondary" disabled>Locked</button>
                 {{else}}
-                <a href="/student/quiz/{{.id}}" class="btn btn-primary">Take Quiz</a>
+                <a href="/student/quiz/{{.id}}" class="btn btn-primary">{{if .attempts}}Take Again{{else}}Take Quiz{{end}}</a>
                 {{end}}
             </div>
             {{end}}

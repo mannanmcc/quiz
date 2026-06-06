@@ -21,7 +21,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get available quizzes
 	rows, err := database.DB.Query(`
-        SELECT id, title, description, created_at
+        SELECT id, title, description, created_at, unlock_version
         FROM quizzes
         ORDER BY created_at DESC
     `)
@@ -33,21 +33,26 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quizzes []map[string]interface{}
 	for rows.Next() {
-		var id int
+		var id, unlockVersion int
 		var title, description, createdAt string
-		rows.Scan(&id, &title, &description, &createdAt)
+		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion)
 
-		// Check if student has already attempted
 		var attemptCount int
 		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
 			userID, id).Scan(&attemptCount)
 
+		var currentAttemptCount int
+		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
+			userID, id, unlockVersion).Scan(&currentAttemptCount)
+
 		quizzes = append(quizzes, map[string]interface{}{
-			"id":          id,
-			"title":       title,
-			"description": description,
-			"created_at":  createdAt,
-			"attempted":   attemptCount > 0,
+			"id":             id,
+			"title":          title,
+			"description":    description,
+			"created_at":     createdAt,
+			"attempts":       attemptCount,
+			"locked":         currentAttemptCount > 0,
+			"unlock_version": unlockVersion,
 		})
 	}
 
@@ -95,26 +100,13 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
 
-	var attemptCount int
-	err := database.DB.QueryRow(
-		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
-		userID, quizID,
-	).Scan(&attemptCount)
-	if err != nil {
-		http.Error(w, "Server error", http.StatusInternalServerError)
-		return
-	}
-	if attemptCount > 0 {
-		http.Error(w, "Quiz already completed", http.StatusLocked)
-		return
-	}
-
 	// Get quiz details
 	var quiz models.Quiz
-	err = database.DB.QueryRow(
-		"SELECT id, title, description FROM quizzes WHERE id = ?",
+	var unlockVersion int
+	err := database.DB.QueryRow(
+		"SELECT id, title, description, unlock_version FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -122,6 +114,20 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	var attemptCount int
+	err = database.DB.QueryRow(
+		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
+		userID, quizID, unlockVersion,
+	).Scan(&attemptCount)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if attemptCount > 0 {
+		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}
 
@@ -178,17 +184,28 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
 
+	var unlockVersion int
+	err := database.DB.QueryRow("SELECT unlock_version FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Quiz not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
 	var attemptCount int
-	err := database.DB.QueryRow(
-		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
-		userID, quizID,
+	err = database.DB.QueryRow(
+		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
+		userID, quizID, unlockVersion,
 	).Scan(&attemptCount)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 	if attemptCount > 0 {
-		http.Error(w, "This quiz is locked because you have already completed it.", http.StatusLocked)
+		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}
 
@@ -213,17 +230,28 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
 
+	var unlockVersion int
+	err := database.DB.QueryRow("SELECT unlock_version FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Quiz not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
 	var attemptCount int
-	err := database.DB.QueryRow(
-		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
-		userID, quizID,
+	err = database.DB.QueryRow(
+		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
+		userID, quizID, unlockVersion,
 	).Scan(&attemptCount)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 	if attemptCount > 0 {
-		http.Error(w, "Quiz already completed", http.StatusLocked)
+		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}
 
@@ -248,21 +276,30 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	score := 0
 	maxScore := 0
 
+	err = tx.QueryRow("SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = ?", quizID).Scan(&maxScore)
+	if err != nil {
+		http.Error(w, "Failed to score quiz", http.StatusInternalServerError)
+		return
+	}
+	if maxScore == 0 {
+		http.Error(w, "Quiz has no questions", http.StatusBadRequest)
+		return
+	}
+
 	for questionIDStr, selectedAnswer := range req.Answers {
 		questionID, _ := strconv.Atoi(questionIDStr)
 
 		var correctAnswer string
 		var points int
 		err := tx.QueryRow(
-			"SELECT correct_answer, points FROM questions WHERE id = ?",
-			questionID,
+			"SELECT correct_answer, points FROM questions WHERE id = ? AND quiz_id = ?",
+			questionID, quizID,
 		).Scan(&correctAnswer, &points)
 
 		if err != nil {
 			continue
 		}
 
-		maxScore += points
 		if selectedAnswer == correctAnswer {
 			score += points
 		}
@@ -270,8 +307,8 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert attempt
 	result, err := tx.Exec(
-		"INSERT INTO quiz_attempts (user_id, quiz_id, score, max_score) VALUES (?, ?, ?, ?)",
-		userID, quizID, score, maxScore,
+		"INSERT INTO quiz_attempts (user_id, quiz_id, score, max_score, unlock_version) VALUES (?, ?, ?, ?, ?)",
+		userID, quizID, score, maxScore, unlockVersion,
 	)
 	if err != nil {
 		http.Error(w, "Failed to save attempt", http.StatusInternalServerError)
@@ -285,7 +322,10 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		questionID, _ := strconv.Atoi(questionIDStr)
 
 		var correctAnswer string
-		tx.QueryRow("SELECT correct_answer FROM questions WHERE id = ?", questionID).Scan(&correctAnswer)
+		err := tx.QueryRow("SELECT correct_answer FROM questions WHERE id = ? AND quiz_id = ?", questionID, quizID).Scan(&correctAnswer)
+		if err != nil {
+			continue
+		}
 
 		isCorrect := selectedAnswer == correctAnswer
 
@@ -297,7 +337,10 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	tx.Commit()
 
-	percentage := float64(score) / float64(maxScore) * 100
+	percentage := 0.0
+	if maxScore > 0 {
+		percentage = float64(score) / float64(maxScore) * 100
+	}
 
 	response := map[string]interface{}{
 		"score":      score,

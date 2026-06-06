@@ -74,6 +74,15 @@ function escapeAttribute(value) {
         .replace(/>/g, '&gt;');
 }
 
+function escapeHTML(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 function addQuestion(question = {}) {
     questionCount++;
     const questionsDiv = document.getElementById('questionsContainer');
@@ -289,8 +298,8 @@ async function loadResults(quizId) {
         results.forEach(result => {
             tableHTML += `
                 <tr>
-                    <td>${result.full_name}</td>
-                    <td>${result.username}</td>
+                    <td>${escapeHTML(result.full_name)}</td>
+                    <td>${escapeHTML(result.username)}</td>
                     <td>${result.score}/${result.max_score}</td>
                     <td>${result.percentage.toFixed(1)}%</td>
                     <td>${new Date(result.completed_at).toLocaleString()}</td>
@@ -307,8 +316,70 @@ async function loadResults(quizId) {
     }
 }
 
+async function loadProgressReport(quizId) {
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}/progress`);
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to load progress report: ' + error);
+            return;
+        }
+
+        const reports = await response.json();
+        const resultsDiv = document.getElementById('resultsContainer');
+        resultsDiv.innerHTML = '<h2>Progress Report</h2>';
+
+        if (!Array.isArray(reports) || reports.length === 0) {
+            resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
+            return;
+        }
+
+        let tableHTML = `
+            <table class="results-table progress-table">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Attempts</th>
+                        <th>First</th>
+                        <th>Latest</th>
+                        <th>Best</th>
+                        <th>Change</th>
+                        <th>Attempt History</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        reports.forEach(report => {
+            const changeClass = report.improvement >= 0 ? 'progress-up' : 'progress-down';
+            const changePrefix = report.improvement > 0 ? '+' : '';
+            const history = report.attempts.map((attempt, index) => {
+                return `<span class="attempt-pill">#${index + 1}: ${attempt.score}/${attempt.max_score} (${attempt.percentage.toFixed(1)}%)</span>`;
+            }).join('');
+
+            tableHTML += `
+                <tr>
+                    <td>${escapeHTML(report.full_name)}<br><span class="quiz-date">${escapeHTML(report.username)}</span></td>
+                    <td>${report.attempt_count}</td>
+                    <td>${report.first_percentage.toFixed(1)}%</td>
+                    <td>${report.latest_percentage.toFixed(1)}%</td>
+                    <td>${report.best_percentage.toFixed(1)}%</td>
+                    <td class="${changeClass}">${changePrefix}${report.improvement.toFixed(1)}%</td>
+                    <td><div class="attempt-history">${history}</div></td>
+                </tr>
+            `;
+        });
+
+        tableHTML += '</tbody></table>';
+        resultsDiv.innerHTML += tableHTML;
+    } catch (error) {
+        console.error('Error loading progress report:', error);
+        alert('Failed to load progress report');
+    }
+}
+
 async function resetQuiz(quizId) {
-    if (!confirm('Reset this quiz for all students? This will delete existing attempts and unlock the quiz.')) {
+    if (!confirm('Unlock this exam for another attempt? Existing attempts will stay in the progress report.')) {
         return;
     }
 
@@ -319,18 +390,15 @@ async function resetQuiz(quizId) {
 
         if (!response.ok) {
             const error = await response.text();
-            alert('Failed to reset quiz: ' + error);
+            alert('Failed to unlock exam: ' + error);
             return;
         }
 
         const result = await response.json();
-        alert(`Quiz reset. Deleted attempts: ${result.deleted_attempts}`);
-        const resultsDiv = document.getElementById('resultsContainer');
-        if (resultsDiv) {
-            resultsDiv.innerHTML = '<h2>Student Results</h2><p>No students have taken this quiz yet.</p>';
-        }
+        alert(`Exam unlocked. Unlock version: ${result.unlock_version}`);
+        loadProgressReport(quizId);
     } catch (error) {
-        console.error('Error resetting quiz:', error);
-        alert('Failed to reset quiz');
+        console.error('Error unlocking exam:', error);
+        alert('Failed to unlock exam');
     }
 }

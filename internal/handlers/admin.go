@@ -257,7 +257,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec("UPDATE quizzes SET title = ?, description = ? WHERE id = ?", req.Title, req.Description, quizID)
+	result, err := tx.Exec("UPDATE quizzes SET title = ?, description = ?, unlock_version = unlock_version + 1 WHERE id = ?", req.Title, req.Description, quizID)
 	if err != nil {
 		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)
 		return
@@ -409,6 +409,103 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+func GetQuizProgressReportHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	quizID := vars["quiz_id"]
+
+	rows, err := database.DB.Query(`
+        SELECT u.id, u.full_name, u.username, qa.id, qa.score, qa.max_score, qa.completed_at
+        FROM quiz_attempts qa
+        JOIN users u ON qa.user_id = u.id
+        WHERE qa.quiz_id = ?
+        ORDER BY u.full_name, u.username, qa.completed_at ASC, qa.id ASC
+    `, quizID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type attemptReport struct {
+		AttemptID   int     `json:"attempt_id"`
+		Score       int     `json:"score"`
+		MaxScore    int     `json:"max_score"`
+		Percentage  float64 `json:"percentage"`
+		CompletedAt string  `json:"completed_at"`
+	}
+
+	type studentReport struct {
+		UserID            int             `json:"user_id"`
+		FullName          string          `json:"full_name"`
+		Username          string          `json:"username"`
+		AttemptCount      int             `json:"attempt_count"`
+		FirstPercentage   float64         `json:"first_percentage"`
+		LatestPercentage  float64         `json:"latest_percentage"`
+		BestPercentage    float64         `json:"best_percentage"`
+		Improvement       float64         `json:"improvement"`
+		FirstCompletedAt  string          `json:"first_completed_at"`
+		LatestCompletedAt string          `json:"latest_completed_at"`
+		Attempts          []attemptReport `json:"attempts"`
+	}
+
+	reports := []studentReport{}
+	reportIndexByUserID := map[int]int{}
+
+	for rows.Next() {
+		var userID, attemptID, score, maxScore int
+		var fullName, username, completedAt string
+		if err := rows.Scan(&userID, &fullName, &username, &attemptID, &score, &maxScore, &completedAt); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+
+		percentage := 0.0
+		if maxScore > 0 {
+			percentage = float64(score) / float64(maxScore) * 100
+		}
+
+		attempt := attemptReport{
+			AttemptID:   attemptID,
+			Score:       score,
+			MaxScore:    maxScore,
+			Percentage:  percentage,
+			CompletedAt: completedAt,
+		}
+
+		index, exists := reportIndexByUserID[userID]
+		if !exists {
+			reports = append(reports, studentReport{
+				UserID:            userID,
+				FullName:          fullName,
+				Username:          username,
+				AttemptCount:      1,
+				FirstPercentage:   percentage,
+				LatestPercentage:  percentage,
+				BestPercentage:    percentage,
+				Improvement:       0,
+				FirstCompletedAt:  completedAt,
+				LatestCompletedAt: completedAt,
+				Attempts:          []attemptReport{attempt},
+			})
+			reportIndexByUserID[userID] = len(reports) - 1
+			continue
+		}
+
+		report := &reports[index]
+		report.AttemptCount++
+		report.LatestPercentage = percentage
+		report.LatestCompletedAt = completedAt
+		report.Improvement = report.LatestPercentage - report.FirstPercentage
+		if percentage > report.BestPercentage {
+			report.BestPercentage = percentage
+		}
+		report.Attempts = append(report.Attempts, attempt)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reports)
+}
+
 func ResetQuizAttemptsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -418,39 +515,26 @@ func ResetQuizAttemptsHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	quizID := vars["quiz_id"]
 
-	tx, err := database.DB.Begin()
+	result, err := database.DB.Exec("UPDATE quizzes SET unlock_version = unlock_version + 1 WHERE id = ?", quizID)
 	if err != nil {
-		http.Error(w, "Server error", http.StatusInternalServerError)
+		http.Error(w, "Failed to unlock quiz", http.StatusInternalServerError)
 		return
 	}
-	defer tx.Rollback()
-
-	_, err = tx.Exec(`
-        DELETE FROM answers
-        WHERE attempt_id IN (
-            SELECT id FROM quiz_attempts WHERE quiz_id = ?
-        )
-    `, quizID)
-	if err != nil {
-		http.Error(w, "Failed to reset quiz answers", http.StatusInternalServerError)
+	updated, _ := result.RowsAffected()
+	if updated == 0 {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
 		return
 	}
 
-	result, err := tx.Exec("DELETE FROM quiz_attempts WHERE quiz_id = ?", quizID)
-	if err != nil {
-		http.Error(w, "Failed to reset quiz attempts", http.StatusInternalServerError)
+	var unlockVersion int
+	if err := database.DB.QueryRow("SELECT unlock_version FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion); err != nil {
+		http.Error(w, "Failed to read unlock state", http.StatusInternalServerError)
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to reset quiz", http.StatusInternalServerError)
-		return
-	}
-
-	deleted, _ := result.RowsAffected()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":          "Quiz reset successfully",
-		"deleted_attempts": deleted,
+		"message":        "Quiz unlocked successfully",
+		"unlock_version": unlockVersion,
 	})
 }

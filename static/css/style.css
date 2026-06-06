@@ -308,6 +308,36 @@ body {
     background: #e3f2fd;
 }
 
+.progress-table td {
+    vertical-align: top;
+}
+
+.attempt-history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.attempt-pill {
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    color: #3730a3;
+    display: inline-block;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.65rem;
+}
+
+.progress-up {
+    color: #15803d;
+    font-weight: 700;
+}
+
+.progress-down {
+    color: #b91c1c;
+    font-weight: 700;
+}
+
 /* Results Box */
 .results-box {
     background: white;

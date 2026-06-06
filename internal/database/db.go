@@ -40,6 +40,7 @@ func createTables() {
         title TEXT NOT NULL,
         description TEXT,
         created_by INTEGER,
+        unlock_version INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (created_by) REFERENCES users(id)
     );
@@ -64,6 +65,7 @@ func createTables() {
         quiz_id INTEGER NOT NULL,
         score INTEGER NOT NULL,
         max_score INTEGER NOT NULL,
+        unlock_version INTEGER DEFAULT 0,
         completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id),
         FOREIGN KEY (quiz_id) REFERENCES quizzes(id)
@@ -85,8 +87,36 @@ func createTables() {
 		log.Fatal("Error creating tables:", err)
 	}
 
+	addColumnIfMissing("quizzes", "unlock_version", "INTEGER DEFAULT 0")
+	addColumnIfMissing("quiz_attempts", "unlock_version", "INTEGER DEFAULT 0")
+
 	// Create default admin user
 	createDefaultAdmin()
+}
+
+func addColumnIfMissing(tableName, columnName, columnDefinition string) {
+	rows, err := DB.Query("PRAGMA table_info(" + tableName + ")")
+	if err != nil {
+		log.Fatal("Error checking table schema:", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull, pk int
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			log.Fatal("Error reading table schema:", err)
+		}
+		if name == columnName {
+			return
+		}
+	}
+
+	if _, err := DB.Exec("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition); err != nil {
+		log.Fatal("Error migrating table schema:", err)
+	}
 }
 
 func createDefaultAdmin() {
