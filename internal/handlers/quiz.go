@@ -3,13 +3,15 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 	"vocabulary-quiz-app/internal/database"
 	"vocabulary-quiz-app/internal/middleware"
 	"vocabulary-quiz-app/internal/models"
+
+	"github.com/gorilla/mux"
 )
 
 func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -264,6 +266,8 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("SubmitQuizHandler called quiz_id=%d user_id=%d answers=%d", quizID, userID, len(req.Answers))
+
 	// Start transaction
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -360,12 +364,15 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"score":      score,
-		"max_score":  maxScore,
-		"percentage": percentage,
-		"message":    "Quiz submitted successfully",
-		"report":     report,
+		"score":           score,
+		"max_score":       maxScore,
+		"percentage":      percentage,
+		"message":         "Quiz submitted successfully",
+		"report":          report,
+		"handler_version": "v2",
 	}
+
+	log.Printf("SubmitQuizHandler returning report size=%d quiz_id=%d user_id=%d", len(report), quizID, userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
