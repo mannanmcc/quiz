@@ -42,7 +42,10 @@ func main() {
 	adminRouter.Use(middleware.AdminMiddleware)
 	adminRouter.HandleFunc("/dashboard", handlers.AdminDashboardHandler).Methods("GET")
 	adminRouter.HandleFunc("/quiz/create", handlers.CreateQuizPageHandler).Methods("GET")
+	adminRouter.HandleFunc("/quiz/{quiz_id}/edit", handlers.EditQuizPageHandler).Methods("GET")
 	adminRouter.HandleFunc("/api/quiz/create", handlers.CreateQuizHandler).Methods("POST")
+	adminRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.GetAdminQuizHandler).Methods("GET")
+	adminRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.UpdateQuizHandler).Methods("PUT")
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}/results", handlers.GetStudentResultsHandler).Methods("GET")
 	adminRouter.HandleFunc("/api/quiz/{quiz_id}/reset", handlers.ResetQuizAttemptsHandler).Methods("POST")
 

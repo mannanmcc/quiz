@@ -27,6 +27,7 @@
                 <p>{{.description}}</p>
                 <p class="quiz-date">Created: {{.created_at}}</p>
                 <p class="quiz-date">By: {{.created_by}}</p>
+                <a class="btn btn-primary" href="/admin/quiz/{{.id}}/edit">Edit Questions</a>
                 <button class="btn btn-primary" onclick="loadResults({{.id}})">View Results</button>
                 <button class="btn btn-secondary" onclick="resetQuiz({{.id}})">Reset Quiz</button>
             </div>

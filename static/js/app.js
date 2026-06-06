@@ -57,14 +57,30 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    if (window.editQuizID) {
+        loadQuizForEdit(window.editQuizID);
+    }
 });
 
 // Admin - Create Quiz Functions
 let questionCount = 0;
 
-function addQuestion() {
+function escapeAttribute(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function addQuestion(question = {}) {
     questionCount++;
     const questionsDiv = document.getElementById('questionsContainer');
+    const options = question.options || [];
+    const correctIndex = question.correct_answer ? options.indexOf(question.correct_answer) + 1 : 0;
+    const questionType = question.question_type || 'meaning';
+    const questionId = question.id || 0;
     
     const questionDiv = document.createElement('div');
     questionDiv.className = 'question-builder';
@@ -72,58 +88,59 @@ function addQuestion() {
     
     questionDiv.innerHTML = `
         <div class="question-builder-header">
-            <h3>Question ${questionCount}</h3>
+            <h3>Question ${questionCount}${questionId ? ` <span class="question-id">#${questionId}</span>` : ''}</h3>
             <button type="button" class="remove-question" onclick="removeQuestion(${questionCount})">Remove</button>
         </div>
+        <input type="hidden" name="question_id_${questionCount}" value="${questionId}">
         
         <div class="form-group">
             <label>Question Type</label>
             <select name="question_type_${questionCount}" required>
-                <option value="meaning">Word Meaning</option>
-                <option value="synonym">Synonym</option>
-                <option value="antonym">Antonym</option>
+                <option value="meaning" ${questionType === 'meaning' ? 'selected' : ''}>Word Meaning</option>
+                <option value="synonym" ${questionType === 'synonym' ? 'selected' : ''}>Synonym</option>
+                <option value="antonym" ${questionType === 'antonym' ? 'selected' : ''}>Antonym</option>
             </select>
         </div>
         
         <div class="form-group">
             <label>Question Text</label>
-            <input type="text" name="question_text_${questionCount}" placeholder="e.g., What is the meaning of 'Happy'?" required>
+            <input type="text" name="question_text_${questionCount}" value="${escapeAttribute(question.question_text)}" placeholder="e.g., What is the meaning of 'Happy'?" required>
         </div>
         
         <div class="form-group">
             <label>Option 1</label>
-            <input type="text" name="option1_${questionCount}" required>
+            <input type="text" name="option1_${questionCount}" value="${escapeAttribute(options[0])}" required>
         </div>
         
         <div class="form-group">
             <label>Option 2</label>
-            <input type="text" name="option2_${questionCount}" required>
+            <input type="text" name="option2_${questionCount}" value="${escapeAttribute(options[1])}" required>
         </div>
         
         <div class="form-group">
             <label>Option 3</label>
-            <input type="text" name="option3_${questionCount}" required>
+            <input type="text" name="option3_${questionCount}" value="${escapeAttribute(options[2])}" required>
         </div>
         
         <div class="form-group">
             <label>Option 4</label>
-            <input type="text" name="option4_${questionCount}" required>
+            <input type="text" name="option4_${questionCount}" value="${escapeAttribute(options[3])}" required>
         </div>
         
         <div class="form-group">
             <label>Correct Answer</label>
             <select name="correct_answer_${questionCount}" required>
                 <option value="">Select correct option</option>
-                <option value="1">Option 1</option>
-                <option value="2">Option 2</option>
-                <option value="3">Option 3</option>
-                <option value="4">Option 4</option>
+                <option value="1" ${correctIndex === 1 ? 'selected' : ''}>Option 1</option>
+                <option value="2" ${correctIndex === 2 ? 'selected' : ''}>Option 2</option>
+                <option value="3" ${correctIndex === 3 ? 'selected' : ''}>Option 3</option>
+                <option value="4" ${correctIndex === 4 ? 'selected' : ''}>Option 4</option>
             </select>
         </div>
         
         <div class="form-group">
             <label>Points</label>
-            <input type="number" name="points_${questionCount}" value="1" min="1" required>
+            <input type="number" name="points_${questionCount}" value="${question.points || 1}" min="1" required>
         </div>
     `;
     
@@ -138,7 +155,7 @@ function removeQuestion(id) {
 }
 
 // Submit Quiz Creation
-async function submitQuiz(event) {
+async function submitQuiz(event, quizId = null) {
     event.preventDefault();
     
     const form = event.target;
@@ -152,6 +169,7 @@ async function submitQuiz(event) {
         const questionDiv = document.getElementById(`question-${i}`);
         if (!questionDiv) continue;
         
+        const questionId = parseInt(formData.get(`question_id_${i}`) || '0');
         const questionType = formData.get(`question_type_${i}`);
         const questionText = formData.get(`question_text_${i}`);
         const option1 = formData.get(`option1_${i}`);
@@ -165,6 +183,7 @@ async function submitQuiz(event) {
         const correctAnswer = options[parseInt(correctAnswerIndex) - 1];
         
         questions.push({
+            id: questionId,
             question_text: questionText,
             question_type: questionType,
             correct_answer: correctAnswer,
@@ -179,8 +198,10 @@ async function submitQuiz(event) {
     }
     
     try {
-        const response = await fetch('/admin/api/quiz/create', {
-            method: 'POST',
+        const url = quizId ? `/admin/api/quiz/${quizId}` : '/admin/api/quiz/create';
+        const method = quizId ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -192,15 +213,42 @@ async function submitQuiz(event) {
         });
         
         if (response.ok) {
-            alert('Quiz created successfully!');
+            alert(quizId ? 'Quiz updated successfully!' : 'Quiz created successfully!');
             window.location.href = '/admin/dashboard';
         } else {
             const error = await response.text();
-            alert('Failed to create quiz: ' + error);
+            alert(`Failed to ${quizId ? 'update' : 'create'} quiz: ` + error);
         }
     } catch (error) {
-        alert('Failed to create quiz. Please try again.');
+        alert(`Failed to ${quizId ? 'update' : 'create'} quiz. Please try again.`);
         console.error('Error:', error);
+    }
+}
+
+async function loadQuizForEdit(quizId) {
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}`);
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to load quiz: ' + error);
+            window.location.href = '/admin/dashboard';
+            return;
+        }
+
+        const data = await response.json();
+        const form = document.getElementById('editQuizForm');
+        form.elements.quiz_title.value = data.quiz.title || '';
+        form.elements.quiz_description.value = data.quiz.description || '';
+
+        const questionsDiv = document.getElementById('questionsContainer');
+        questionsDiv.innerHTML = '';
+        questionCount = 0;
+
+        (data.questions || []).forEach(question => addQuestion(question));
+    } catch (error) {
+        console.error('Error loading quiz:', error);
+        alert('Failed to load quiz');
+        window.location.href = '/admin/dashboard';
     }
 }
 
@@ -208,12 +256,18 @@ async function submitQuiz(event) {
 async function loadResults(quizId) {
     try {
         const response = await fetch(`/admin/api/quiz/${quizId}/results`);
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to load results: ' + error);
+            return;
+        }
+
         const results = await response.json();
         
         const resultsDiv = document.getElementById('resultsContainer');
         resultsDiv.innerHTML = '<h2>Student Results</h2>';
         
-        if (results.length === 0) {
+        if (!Array.isArray(results) || results.length === 0) {
             resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
             return;
         }
@@ -271,7 +325,10 @@ async function resetQuiz(quizId) {
 
         const result = await response.json();
         alert(`Quiz reset. Deleted attempts: ${result.deleted_attempts}`);
-        loadResults(quizId);
+        const resultsDiv = document.getElementById('resultsContainer');
+        if (resultsDiv) {
+            resultsDiv.innerHTML = '<h2>Student Results</h2><p>No students have taken this quiz yet.</p>';
+        }
     } catch (error) {
         console.error('Error resetting quiz:', error);
         alert('Failed to reset quiz');

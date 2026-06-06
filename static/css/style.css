@@ -399,6 +399,12 @@ body {
     margin-bottom: 1rem;
 }
 
+.question-id {
+    color: #888;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
 .remove-question {
     background: #dc3545;
     color: white;
