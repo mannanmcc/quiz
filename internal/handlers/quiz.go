@@ -272,7 +272,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Calculate score
+	// Calculate score and build a detailed feedback report.
 	score := 0
 	maxScore := 0
 
@@ -286,23 +286,40 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for questionIDStr, selectedAnswer := range req.Answers {
-		questionID, _ := strconv.Atoi(questionIDStr)
+	rows, err := tx.Query(
+		"SELECT id, question_text, correct_answer, points FROM questions WHERE quiz_id = ? ORDER BY id",
+		quizID,
+	)
+	if err != nil {
+		http.Error(w, "Failed to build answer report", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
 
-		var correctAnswer string
+	report := make([]map[string]interface{}, 0)
+	for rows.Next() {
+		var questionID int
+		var questionText, correctAnswer string
 		var points int
-		err := tx.QueryRow(
-			"SELECT correct_answer, points FROM questions WHERE id = ? AND quiz_id = ?",
-			questionID, quizID,
-		).Scan(&correctAnswer, &points)
 
-		if err != nil {
+		if err := rows.Scan(&questionID, &questionText, &correctAnswer, &points); err != nil {
 			continue
 		}
 
-		if selectedAnswer == correctAnswer {
+		selectedAnswer := req.Answers[strconv.Itoa(questionID)]
+		isCorrect := selectedAnswer != "" && selectedAnswer == correctAnswer
+		if isCorrect {
 			score += points
 		}
+
+		report = append(report, map[string]interface{}{
+			"question_id":     questionID,
+			"question_text":   questionText,
+			"selected_answer": selectedAnswer,
+			"correct_answer":  correctAnswer,
+			"is_correct":      isCorrect,
+			"points":          points,
+		})
 	}
 
 	// Insert attempt
@@ -347,6 +364,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		"max_score":  maxScore,
 		"percentage": percentage,
 		"message":    "Quiz submitted successfully",
+		"report":     report,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

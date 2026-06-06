@@ -30,8 +30,12 @@
             <div class="results-box">
                 <h2>Your Score: <span id="finalScore"></span></h2>
                 <p id="finalPercentage"></p>
-                <a href="/student/dashboard" class="btn btn-primary">Back to Dashboard</a>
             </div>
+            <section id="reportSection">
+                <h2>Review Your Answers</h2>
+                <div id="reportDetails"></div>
+            </section>
+            <a href="/student/dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
     </div>
 
@@ -49,6 +53,40 @@
             document.getElementById('quizTitle').textContent = 'Unable to load quiz';
             document.getElementById('quizDescription').textContent = message;
             document.getElementById('quizForm').style.display = 'none';
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderFeedbackReport(report) {
+            const reportContainer = document.getElementById('reportDetails');
+            reportContainer.innerHTML = '';
+
+            if (!Array.isArray(report) || report.length === 0) {
+                reportContainer.innerHTML = '<p>No answer report available.</p>';
+                return;
+            }
+
+            report.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'report-card';
+                itemDiv.innerHTML = `
+                    <h3>Question ${index + 1}</h3>
+                    <p class="report-question">${escapeHTML(item.question_text)}</p>
+                    <p><strong>Your answer:</strong> ${escapeHTML(item.selected_answer || 'No answer')}</p>
+                    <p><strong>Correct answer:</strong> ${escapeHTML(item.correct_answer)}</p>
+                    <p class="report-status ${item.is_correct ? 'correct-answer' : 'incorrect-answer'}">
+                        ${item.is_correct ? 'Correct' : 'Incorrect'}
+                    </p>
+                `;
+                reportContainer.appendChild(itemDiv);
+            });
         }
 
         function renderQuestion(q, index) {
@@ -153,6 +191,10 @@
                 }
 
                 const result = await response.json();
+                console.log('submit result', result);
+                if (!Array.isArray(result.report)) {
+                    console.warn('Expected result.report to be an array', result.report);
+                }
 
                 document.getElementById('quizContainer').style.display = 'none';
                 document.getElementById('resultsContainer').style.display = 'block';
@@ -160,6 +202,7 @@
                     `${result.score} / ${result.max_score}`;
                 document.getElementById('finalPercentage').textContent =
                     `Percentage: ${result.percentage.toFixed(1)}%`;
+                renderFeedbackReport(result.report);
             } catch (error) {
                 console.error('Error submitting quiz:', error);
                 alert('Failed to submit quiz. Please try again.');
