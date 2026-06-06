@@ -211,6 +211,7 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
 	tmpl := template.Must(template.ParseFiles("templates/quiz.html"))
 
 	data := map[string]interface{}{

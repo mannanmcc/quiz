@@ -241,6 +241,17 @@ body {
     white-space: pre-wrap;
 }
 
+.debug-badge {
+    margin: 1rem 2rem;
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: #ffe8e8;
+    color: #b02a37;
+    font-weight: 700;
+    border: 1px solid #f5c2c7;
+}
+
 .correct-answer {
     color: #1f7a1f;
 }

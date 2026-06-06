@@ -14,6 +14,8 @@
         </div>
     </nav>
 
+    <div class="debug-badge">QUIZ PAGE V2</div>
+
     <div class="container">
         <div id="quizContainer">
             <h1 id="quizTitle">Loading...</h1>
@@ -42,6 +44,8 @@
 
     <script>
         const quizId = "{{.QuizID}}";
+        console.log('quiz page loaded v2');
+        console.log('submit endpoint', `/student/api/quiz/${quizId}/submit`);
 
         function questionTypeLabel(type) {
             if (type === 'meaning') return 'Meaning';
