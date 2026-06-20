@@ -23,7 +23,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get available quizzes
 	rows, err := database.DB.Query(`
-        SELECT id, title, description, created_at, unlock_version
+        SELECT id, title, description, created_at, unlock_version, lock_after_attempt
         FROM quizzes
         ORDER BY created_at DESC
     `)
@@ -36,8 +36,9 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	var quizzes []map[string]interface{}
 	for rows.Next() {
 		var id, unlockVersion int
+		var lockAfterAttempt bool
 		var title, description, createdAt string
-		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion)
+		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt)
 
 		var attemptCount int
 		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
@@ -48,13 +49,14 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			userID, id, unlockVersion).Scan(&currentAttemptCount)
 
 		quizzes = append(quizzes, map[string]interface{}{
-			"id":             id,
-			"title":          title,
-			"description":    description,
-			"created_at":     createdAt,
-			"attempts":       attemptCount,
-			"locked":         currentAttemptCount > 0,
-			"unlock_version": unlockVersion,
+			"id":                 id,
+			"title":              title,
+			"description":        description,
+			"created_at":         createdAt,
+			"attempts":           attemptCount,
+			"locked":             lockAfterAttempt && currentAttemptCount > 0,
+			"unlock_version":     unlockVersion,
+			"lock_after_attempt": lockAfterAttempt,
 		})
 	}
 
@@ -106,9 +108,9 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var quiz models.Quiz
 	var unlockVersion int
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, unlock_version FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, unlock_version, lock_after_attempt FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.LockAfterAttempt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -128,7 +130,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	if attemptCount > 0 {
+	if quiz.LockAfterAttempt && attemptCount > 0 {
 		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}
@@ -187,7 +189,8 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	userID := session.Values["user_id"].(int)
 
 	var unlockVersion int
-	err := database.DB.QueryRow("SELECT unlock_version FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion)
+	var lockAfterAttempt bool
+	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -206,7 +209,7 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	if attemptCount > 0 {
+	if lockAfterAttempt && attemptCount > 0 {
 		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}
@@ -234,7 +237,8 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	userID := session.Values["user_id"].(int)
 
 	var unlockVersion int
-	err := database.DB.QueryRow("SELECT unlock_version FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion)
+	var lockAfterAttempt bool
+	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -253,7 +257,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	if attemptCount > 0 {
+	if lockAfterAttempt && attemptCount > 0 {
 		http.Error(w, "This exam is locked until the admin unlocks it again.", http.StatusLocked)
 		return
 	}

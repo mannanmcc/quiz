@@ -22,9 +22,17 @@ type quizQuestionRequest struct {
 }
 
 type saveQuizRequest struct {
-	Title       string                `json:"title"`
-	Description string                `json:"description"`
-	Questions   []quizQuestionRequest `json:"questions"`
+	Title            string                `json:"title"`
+	Description      string                `json:"description"`
+	LockAfterAttempt *bool                 `json:"lock_after_attempt"`
+	Questions        []quizQuestionRequest `json:"questions"`
+}
+
+func (req saveQuizRequest) shouldLockAfterAttempt() bool {
+	if req.LockAfterAttempt == nil {
+		return true
+	}
+	return *req.LockAfterAttempt
 }
 
 func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +40,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get all quizzes
 	rows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, u.full_name
+        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt
         FROM quizzes q
         JOIN users u ON q.created_by = u.id
         ORDER BY q.created_at DESC
@@ -46,14 +54,16 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	var quizzes []map[string]interface{}
 	for rows.Next() {
 		var id int
+		var lockAfterAttempt bool
 		var title, description, createdAt, createdBy string
-		rows.Scan(&id, &title, &description, &createdAt, &createdBy)
+		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt)
 		quizzes = append(quizzes, map[string]interface{}{
-			"id":          id,
-			"title":       title,
-			"description": description,
-			"created_at":  createdAt,
-			"created_by":  createdBy,
+			"id":                 id,
+			"title":              title,
+			"description":        description,
+			"created_at":         createdAt,
+			"created_by":         createdBy,
+			"lock_after_attempt": lockAfterAttempt,
 		})
 	}
 
@@ -116,8 +126,8 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert quiz
 	result, err := tx.Exec(
-		"INSERT INTO quizzes (title, description, created_by) VALUES (?, ?, ?)",
-		req.Title, req.Description, userID,
+		"INSERT INTO quizzes (title, description, created_by, lock_after_attempt) VALUES (?, ?, ?, ?)",
+		req.Title, req.Description, userID, req.shouldLockAfterAttempt(),
 	)
 	if err != nil {
 		http.Error(w, "Failed to create quiz", http.StatusInternalServerError)
@@ -168,9 +178,9 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quiz models.Quiz
 	err := database.DB.QueryRow(
-		"SELECT id, title, description FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, lock_after_attempt FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.LockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -257,7 +267,10 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec("UPDATE quizzes SET title = ?, description = ?, unlock_version = unlock_version + 1 WHERE id = ?", req.Title, req.Description, quizID)
+	result, err := tx.Exec(
+		"UPDATE quizzes SET title = ?, description = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
+		req.Title, req.Description, req.shouldLockAfterAttempt(), quizID,
+	)
 	if err != nil {
 		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)
 		return

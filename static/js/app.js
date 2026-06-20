@@ -172,6 +172,7 @@ async function submitQuiz(event, quizId = null) {
     
     const title = formData.get('quiz_title');
     const description = formData.get('quiz_description');
+    const lockAfterAttempt = formData.get('do_not_lock_after_attempt') !== 'on';
     
     const questions = [];
     for (let i = 1; i <= questionCount; i++) {
@@ -217,6 +218,7 @@ async function submitQuiz(event, quizId = null) {
             body: JSON.stringify({
                 title: title,
                 description: description,
+                lock_after_attempt: lockAfterAttempt,
                 questions: questions
             })
         });
@@ -248,6 +250,7 @@ async function loadQuizForEdit(quizId) {
         const form = document.getElementById('editQuizForm');
         form.elements.quiz_title.value = data.quiz.title || '';
         form.elements.quiz_description.value = data.quiz.description || '';
+        form.elements.do_not_lock_after_attempt.checked = !Boolean(data.quiz.lock_after_attempt);
 
         const questionsDiv = document.getElementById('questionsContainer');
         questionsDiv.innerHTML = '';

@@ -41,6 +41,7 @@ func createTables() {
         description TEXT,
         created_by INTEGER,
         unlock_version INTEGER DEFAULT 0,
+        lock_after_attempt BOOLEAN DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (created_by) REFERENCES users(id)
     );
@@ -88,6 +89,7 @@ func createTables() {
 	}
 
 	addColumnIfMissing("quizzes", "unlock_version", "INTEGER DEFAULT 0")
+	addColumnIfMissing("quizzes", "lock_after_attempt", "BOOLEAN DEFAULT 1")
 	addColumnIfMissing("quiz_attempts", "unlock_version", "INTEGER DEFAULT 0")
 
 	// Create default admin user
