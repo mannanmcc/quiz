@@ -405,3 +405,75 @@ async function resetQuiz(quizId) {
         alert('Failed to unlock exam');
     }
 }
+
+async function archiveQuiz(quizId) {
+    if (!confirm('Archive this exam? Archived exams are hidden from students.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}/archive`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to archive exam: ' + error);
+            return;
+        }
+
+        alert('Exam archived successfully.');
+        window.location.reload();
+    } catch (error) {
+        console.error('Error archiving exam:', error);
+        alert('Failed to archive exam');
+    }
+}
+
+async function unarchiveQuiz(quizId) {
+    if (!confirm('Restore this archived exam to live status?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}/unarchive`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to restore exam: ' + error);
+            return;
+        }
+
+        alert('Exam restored successfully.');
+        window.location.reload();
+    } catch (error) {
+        console.error('Error restoring exam:', error);
+        alert('Failed to restore exam');
+    }
+}
+
+async function deleteQuiz(quizId) {
+    if (!confirm('Delete this exam permanently? This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/quiz/${quizId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to delete exam: ' + error);
+            return;
+        }
+
+        alert('Exam deleted successfully.');
+        window.location.reload();
+    } catch (error) {
+        console.error('Error deleting exam:', error);
+        alert('Failed to delete exam');
+    }
+}

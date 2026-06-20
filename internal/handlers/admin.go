@@ -3,13 +3,14 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"html/template"
 	"net/http"
 	"strconv"
 	"vocabulary-quiz-app/internal/database"
 	"vocabulary-quiz-app/internal/middleware"
 	"vocabulary-quiz-app/internal/models"
+
+	"github.com/gorilla/mux"
 )
 
 type quizQuestionRequest struct {
@@ -40,7 +41,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get all quizzes
 	rows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt
+        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived
         FROM quizzes q
         JOIN users u ON q.created_by = u.id
         ORDER BY q.created_at DESC
@@ -51,24 +52,33 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var quizzes []map[string]interface{}
+	var activeQuizzes []map[string]interface{}
+	var archivedQuizzes []map[string]interface{}
 	for rows.Next() {
 		var id int
 		var lockAfterAttempt bool
+		var isArchived bool
 		var title, description, createdAt, createdBy string
-		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt)
-		quizzes = append(quizzes, map[string]interface{}{
+		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived)
+		quiz := map[string]interface{}{
 			"id":                 id,
 			"title":              title,
 			"description":        description,
 			"created_at":         createdAt,
 			"created_by":         createdBy,
 			"lock_after_attempt": lockAfterAttempt,
-		})
+			"is_archived":        isArchived,
+		}
+		if isArchived {
+			archivedQuizzes = append(archivedQuizzes, quiz)
+		} else {
+			activeQuizzes = append(activeQuizzes, quiz)
+		}
 	}
 
 	data := map[string]interface{}{
-		"Quizzes": quizzes,
+		"ActiveQuizzes":   activeQuizzes,
+		"ArchivedQuizzes": archivedQuizzes,
 	}
 	tmpl.Execute(w, data)
 }
@@ -379,6 +389,119 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message": "Quiz updated successfully",
 		"quiz_id": quizID,
+	})
+}
+
+func ArchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	quizID := vars["quiz_id"]
+
+	result, err := database.DB.Exec("UPDATE quizzes SET is_archived = 1 WHERE id = ?", quizID)
+	if err != nil {
+		http.Error(w, "Failed to archive exam", http.StatusInternalServerError)
+		return
+	}
+
+	updated, _ := result.RowsAffected()
+	if updated == 0 {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Quiz archived successfully",
+	})
+}
+
+func UnarchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	quizID := vars["quiz_id"]
+
+	result, err := database.DB.Exec("UPDATE quizzes SET is_archived = 0 WHERE id = ?", quizID)
+	if err != nil {
+		http.Error(w, "Failed to restore exam", http.StatusInternalServerError)
+		return
+	}
+
+	updated, _ := result.RowsAffected()
+	if updated == 0 {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Quiz restored successfully",
+	})
+}
+
+func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	quizID := vars["quiz_id"]
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.Exec(`
+        DELETE FROM answers
+        WHERE attempt_id IN (
+            SELECT id FROM quiz_attempts WHERE quiz_id = ?
+        )
+    `, quizID); err != nil {
+		http.Error(w, "Failed to delete quiz answers", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = tx.Exec("DELETE FROM quiz_attempts WHERE quiz_id = ?", quizID); err != nil {
+		http.Error(w, "Failed to delete quiz attempts", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = tx.Exec("DELETE FROM questions WHERE quiz_id = ?", quizID); err != nil {
+		http.Error(w, "Failed to delete quiz questions", http.StatusInternalServerError)
+		return
+	}
+
+	result, err := tx.Exec("DELETE FROM quizzes WHERE id = ?", quizID)
+	if err != nil {
+		http.Error(w, "Failed to delete quiz", http.StatusInternalServerError)
+		return
+	}
+
+	deleted, _ := result.RowsAffected()
+	if deleted == 0 {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to complete deletion", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Quiz deleted successfully",
 	})
 }
 

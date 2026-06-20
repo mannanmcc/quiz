@@ -25,6 +25,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(`
         SELECT id, title, description, created_at, unlock_version, lock_after_attempt
         FROM quizzes
+        WHERE is_archived = 0
         ORDER BY created_at DESC
     `)
 	if err != nil {
@@ -107,10 +108,11 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	// Get quiz details
 	var quiz models.Quiz
 	var unlockVersion int
+	var isArchived bool
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, unlock_version, lock_after_attempt FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.LockAfterAttempt)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.LockAfterAttempt, &isArchived)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -118,6 +120,11 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if isArchived {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
 		return
 	}
 
@@ -190,13 +197,19 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 
 	var unlockVersion int
 	var lockAfterAttempt bool
-	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt)
+	var isArchived bool
+	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt, &isArchived)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if isArchived {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
 		return
 	}
 
@@ -238,13 +251,19 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	var unlockVersion int
 	var lockAfterAttempt bool
-	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt)
+	var isArchived bool
+	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt, &isArchived)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if isArchived {
+		http.Error(w, "Quiz not found", http.StatusNotFound)
 		return
 	}
 

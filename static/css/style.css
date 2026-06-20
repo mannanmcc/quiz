@@ -198,6 +198,37 @@ body {
     box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 }
 
+.quiz-card.archived-card {
+    background: #f4f6f9;
+    border: 1px solid #d1d9e6;
+}
+
+.quiz-card.archived-card h3 {
+    color: #555;
+}
+
+.dashboard-section {
+    margin-bottom: 3rem;
+}
+
+.dashboard-section h2 {
+    color: #1f2937;
+    margin-bottom: 1rem;
+    font-size: 1.75rem;
+}
+
+.archived-section {
+    padding-top: 1rem;
+    border-top: 1px solid rgba(102, 126, 234, 0.18);
+}
+
+.empty-message {
+    grid-column: 1 / -1;
+    color: #6b7280;
+    font-size: 1rem;
+    padding: 1rem 0;
+}
+
 .quiz-card h3 {
     color: #667eea;
     margin-bottom: 1rem;
