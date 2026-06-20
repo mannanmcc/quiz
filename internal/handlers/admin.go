@@ -52,8 +52,8 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var activeQuizzes []map[string]interface{}
-	var archivedQuizzes []map[string]interface{}
+	var activeQuizzes []map[string]interface{} = []map[string]interface{}{}
+	var archivedQuizzes []map[string]interface{} = []map[string]interface{}{}
 	for rows.Next() {
 		var id int
 		var lockAfterAttempt bool
