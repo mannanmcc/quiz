@@ -211,10 +211,56 @@ body {
     margin-bottom: 3rem;
 }
 
+.dashboard-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.dashboard-tab {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    border-radius: 8px;
+    color: white;
+    font-weight: 700;
+    padding: 0.75rem 1.1rem;
+    text-decoration: none;
+}
+
+.dashboard-tab.active,
+.dashboard-tab:hover {
+    background: white;
+    color: #4f46e5;
+}
+
+.dashboard-panel {
+    display: none;
+}
+
+.dashboard-panel.active {
+    display: block;
+}
+
+.section-heading {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.section-heading h2 {
+    margin-bottom: 0;
+}
+
 .dashboard-section h2 {
     color: #1f2937;
     margin-bottom: 1rem;
     font-size: 1.75rem;
+}
+
+.dashboard-section .section-heading h2 {
+    margin-bottom: 0;
 }
 
 .archived-section {
@@ -244,6 +290,11 @@ body {
     color: #999;
 }
 
+.stage-summary {
+    color: white;
+    margin: -0.5rem 0 1.5rem;
+}
+
 /* Exam Management Table */
 .exam-table-wrap {
     background: white;
@@ -256,6 +307,10 @@ body {
     width: 100%;
     min-width: 920px;
     border-collapse: collapse;
+}
+
+.student-table {
+    min-width: 1080px;
 }
 
 .exam-table th,
@@ -545,6 +600,11 @@ body {
     color: #0c5460;
 }
 
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
 /* Register Link */
 .register-link {
     text-align: center;
@@ -571,6 +631,11 @@ body {
 
 .admin-header h1 {
     color: white;
+}
+
+.dashboard-alert {
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    margin-bottom: 1.5rem;
 }
 
 /* Create Quiz Form */
@@ -624,6 +689,22 @@ body {
     .navbar {
         flex-direction: column;
         gap: 1rem;
+    }
+
+    .nav-user,
+    .section-heading {
+        align-items: stretch;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .dashboard-tabs {
+        width: 100%;
+    }
+
+    .dashboard-tab {
+        flex: 1;
+        text-align: center;
     }
     
     .question-header {

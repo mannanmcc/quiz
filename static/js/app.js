@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fullName = document.getElementById('reg_fullname').value;
             const username = document.getElementById('reg_username').value;
             const password = document.getElementById('reg_password').value;
+            const stageID = parseInt(document.getElementById('reg_stage').value, 10);
 
             try {
                 const response = await fetch('/api/register', {
@@ -38,7 +39,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         full_name: fullName,
                         username: username,
-                        password: password
+                        password: password,
+                        stage_id: stageID
                     })
                 });
 
@@ -58,10 +60,82 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const adminCreateStudentForm = document.getElementById('adminCreateStudentForm');
+    if (adminCreateStudentForm) {
+        adminCreateStudentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const fullName = document.getElementById('student_fullname').value;
+            const username = document.getElementById('student_username').value;
+            const password = document.getElementById('student_password').value;
+            const stageID = parseInt(document.getElementById('student_stage').value, 10);
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        username: username,
+                        password: password,
+                        stage_id: stageID
+                    })
+                });
+
+                if (response.ok) {
+                    window.location.href = `/admin/dashboard?registered=student&username=${encodeURIComponent(username)}#students`;
+                } else {
+                    const error = await response.text();
+                    alert('Registration failed: ' + error);
+                }
+            } catch (error) {
+                alert('Registration failed. Please try again.');
+                console.error('Error:', error);
+            }
+        });
+    }
+
     if (window.editQuizID) {
         loadQuizForEdit(window.editQuizID);
     }
+
+    initializeDashboardTabs();
 });
+
+function initializeDashboardTabs() {
+    const tabs = document.querySelectorAll('[data-dashboard-tab]');
+    const panels = document.querySelectorAll('[data-dashboard-panel]');
+    if (!tabs.length || !panels.length) {
+        return;
+    }
+
+    const activateTab = (tabName) => {
+        const selectedTabName = tabName || 'quizzes';
+
+        tabs.forEach(tab => {
+            const isActive = tab.dataset.dashboardTab === selectedTabName;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        panels.forEach(panel => {
+            panel.classList.toggle('active', panel.dataset.dashboardPanel === selectedTabName);
+        });
+    };
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.dataset.dashboardTab;
+            history.replaceState(null, '', `#${tabName}`);
+            activateTab(tabName);
+        });
+    });
+
+    activateTab(window.location.hash.replace('#', '') || 'quizzes');
+}
 
 // Admin - Create Quiz Functions
 let questionCount = 0;
@@ -172,6 +246,7 @@ async function submitQuiz(event, quizId = null) {
     
     const title = formData.get('quiz_title');
     const description = formData.get('quiz_description');
+    const stageID = parseInt(formData.get('stage_id'), 10);
     const lockAfterAttempt = formData.get('do_not_lock_after_attempt') !== 'on';
     
     const questions = [];
@@ -218,6 +293,7 @@ async function submitQuiz(event, quizId = null) {
             body: JSON.stringify({
                 title: title,
                 description: description,
+                stage_id: stageID,
                 lock_after_attempt: lockAfterAttempt,
                 questions: questions
             })
@@ -250,6 +326,7 @@ async function loadQuizForEdit(quizId) {
         const form = document.getElementById('editQuizForm');
         form.elements.quiz_title.value = data.quiz.title || '';
         form.elements.quiz_description.value = data.quiz.description || '';
+        form.elements.stage_id.value = data.quiz.stage_id || '';
         form.elements.do_not_lock_after_attempt.checked = !Boolean(data.quiz.lock_after_attempt);
 
         const questionsDiv = document.getElementById('questionsContainer');
@@ -451,6 +528,66 @@ async function unarchiveQuiz(quizId) {
     } catch (error) {
         console.error('Error restoring exam:', error);
         alert('Failed to restore exam');
+    }
+}
+
+async function setStudentDisabled(studentId, studentName, action) {
+    const actionLabel = action === 'disable' ? 'disable' : 'enable';
+    const resultLabel = action === 'disable' ? 'disabled' : 'enabled';
+    const confirmMessage = action === 'disable'
+        ? `Disable ${studentName}? They will not be able to log in or continue using the app.`
+        : `Enable ${studentName}? They will be able to log in again.`;
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/student/${studentId}/${actionLabel}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert(`Failed to ${actionLabel} student: ` + error);
+            return;
+        }
+
+        window.location.href = `/admin/dashboard?student_action=${resultLabel}&student_name=${encodeURIComponent(studentName)}#students`;
+    } catch (error) {
+        console.error(`Error trying to ${actionLabel} student:`, error);
+        alert(`Failed to ${actionLabel} student`);
+    }
+}
+
+function disableStudent(studentId, studentName) {
+    setStudentDisabled(studentId, studentName, 'disable');
+}
+
+function enableStudent(studentId, studentName) {
+    setStudentDisabled(studentId, studentName, 'enable');
+}
+
+async function deleteStudent(studentId, studentName) {
+    if (!confirm(`Delete ${studentName} permanently? Their attempts and answers will also be removed.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/admin/api/student/${studentId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            alert('Failed to delete student: ' + error);
+            return;
+        }
+
+        window.location.href = `/admin/dashboard?student_action=deleted&student_name=${encodeURIComponent(studentName)}#students`;
+    } catch (error) {
+        console.error('Error deleting student:', error);
+        alert('Failed to delete student');
     }
 }
 

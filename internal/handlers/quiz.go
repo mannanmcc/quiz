@@ -14,6 +14,21 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func userCanAccessQuiz(userID int, quizID interface{}) (bool, error) {
+	var count int
+	err := database.DB.QueryRow(`
+        SELECT COUNT(*)
+        FROM quizzes q
+        JOIN users u ON u.stage_id = q.stage_id
+        WHERE u.id = ? AND q.id = ? AND q.is_archived = 0
+    `, userID, quizID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
@@ -21,13 +36,26 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	tmpl := template.Must(template.ParseFiles("templates/student_dashboard.html"))
 
+	var stageName string
+	var stageID int
+	err := database.DB.QueryRow(`
+        SELECT COALESCE(s.id, 0), COALESCE(s.name, 'No stage')
+        FROM users u
+        LEFT JOIN stages s ON u.stage_id = s.id
+        WHERE u.id = ?
+    `, userID).Scan(&stageID, &stageName)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Get available quizzes
 	rows, err := database.DB.Query(`
         SELECT id, title, description, created_at, unlock_version, lock_after_attempt
         FROM quizzes
-        WHERE is_archived = 0
+        WHERE is_archived = 0 AND stage_id = ?
         ORDER BY created_at DESC
-    `)
+    `, stageID)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
@@ -91,6 +119,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]interface{}{
 		"Username":       username,
+		"StageName":      stageName,
 		"Quizzes":        quizzes,
 		"RecentAttempts": recentAttempts,
 	}
@@ -125,6 +154,16 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	if isArchived {
 		http.Error(w, "Quiz not found", http.StatusNotFound)
+		return
+	}
+
+	canAccess, err := userCanAccessQuiz(userID, quizID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !canAccess {
+		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
 		return
 	}
 
@@ -213,6 +252,16 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	canAccess, err := userCanAccessQuiz(userID, quizID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !canAccess {
+		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
+		return
+	}
+
 	var attemptCount int
 	err = database.DB.QueryRow(
 		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
@@ -264,6 +313,16 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	if isArchived {
 		http.Error(w, "Quiz not found", http.StatusNotFound)
+		return
+	}
+
+	canAccess, err := userCanAccessQuiz(userID, quizID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !canAccess {
+		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
 		return
 	}
 

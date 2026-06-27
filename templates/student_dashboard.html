@@ -17,6 +17,7 @@
 
     <div class="container">
         <h1>Available Quizzes</h1>
+        <p class="stage-summary">Stage: <strong>{{.StageName}}</strong></p>
         
         <div class="quiz-grid">
             {{range .Quizzes}}
@@ -33,6 +34,8 @@
                 <a href="/student/quiz/{{.id}}" class="btn btn-primary">{{if .attempts}}Take Again{{else}}Take Quiz{{end}}</a>
                 {{end}}
             </div>
+            {{else}}
+            <p class="empty-message">No quizzes are assigned to your stage yet.</p>
             {{end}}
         </div>
 

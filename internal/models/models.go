@@ -3,12 +3,14 @@ package models
 import "time"
 
 type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	Role      string    `json:"role"` // "student" or "admin"
-	FullName  string    `json:"full_name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         int       `json:"id"`
+	Username   string    `json:"username"`
+	Password   string    `json:"-"`
+	Role       string    `json:"role"` // "student" or "admin"
+	FullName   string    `json:"full_name"`
+	StageID    int       `json:"stage_id"`
+	IsDisabled bool      `json:"is_disabled"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Quiz struct {
@@ -16,8 +18,16 @@ type Quiz struct {
 	Title            string    `json:"title"`
 	Description      string    `json:"description"`
 	CreatedBy        int       `json:"created_by"`
+	StageID          int       `json:"stage_id"`
 	LockAfterAttempt bool      `json:"lock_after_attempt"`
 	CreatedAt        time.Time `json:"created_at"`
+}
+
+type Stage struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Question struct {

@@ -25,6 +25,7 @@ type quizQuestionRequest struct {
 type saveQuizRequest struct {
 	Title            string                `json:"title"`
 	Description      string                `json:"description"`
+	StageID          int                   `json:"stage_id"`
 	LockAfterAttempt *bool                 `json:"lock_after_attempt"`
 	Questions        []quizQuestionRequest `json:"questions"`
 }
@@ -41,9 +42,10 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get all quizzes
 	rows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived
+        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived, COALESCE(s.name, 'General')
         FROM quizzes q
         JOIN users u ON q.created_by = u.id
+        LEFT JOIN stages s ON q.stage_id = s.id
         ORDER BY q.created_at DESC
     `)
 	if err != nil {
@@ -58,14 +60,15 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		var id int
 		var lockAfterAttempt bool
 		var isArchived bool
-		var title, description, createdAt, createdBy string
-		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived)
+		var title, description, createdAt, createdBy, stageName string
+		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived, &stageName)
 		quiz := map[string]interface{}{
 			"id":                 id,
 			"title":              title,
 			"description":        description,
 			"created_at":         createdAt,
 			"created_by":         createdBy,
+			"stage_name":         stageName,
 			"lock_after_attempt": lockAfterAttempt,
 			"is_archived":        isArchived,
 		}
@@ -76,16 +79,226 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	studentRows, err := database.DB.Query(`
+        SELECT
+            u.id,
+            u.full_name,
+            u.username,
+            COALESCE(s.name, 'No stage'),
+            COALESCE(u.is_disabled, 0),
+            u.created_at,
+            COUNT(qa.id),
+            COALESCE(SUM(qa.score), 0),
+            COALESCE(SUM(qa.max_score), 0),
+            MAX(qa.completed_at),
+            (
+                SELECT COUNT(*)
+                FROM quizzes q
+                WHERE q.is_archived = 0 AND q.stage_id = u.stage_id
+            )
+        FROM users u
+        LEFT JOIN stages s ON u.stage_id = s.id
+        LEFT JOIN quiz_attempts qa ON qa.user_id = u.id
+        WHERE u.role = 'student'
+        GROUP BY u.id, u.full_name, u.username, s.name, u.is_disabled, u.created_at, u.stage_id
+        ORDER BY u.created_at DESC
+    `)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer studentRows.Close()
+
+	var students []map[string]interface{} = []map[string]interface{}{}
+	for studentRows.Next() {
+		var id, attemptCount, totalScore, totalMaxScore, assignedQuizzes int
+		var isDisabled bool
+		var fullName, username, stageName, createdAt string
+		var lastAttempt sql.NullString
+
+		if err := studentRows.Scan(&id, &fullName, &username, &stageName, &isDisabled, &createdAt, &attemptCount, &totalScore, &totalMaxScore, &lastAttempt, &assignedQuizzes); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+
+		averagePercentage := 0.0
+		if totalMaxScore > 0 {
+			averagePercentage = float64(totalScore) / float64(totalMaxScore) * 100
+		}
+
+		lastAttemptAt := "No attempts yet"
+		if lastAttempt.Valid {
+			lastAttemptAt = lastAttempt.String
+		}
+
+		students = append(students, map[string]interface{}{
+			"id":                 id,
+			"full_name":          fullName,
+			"username":           username,
+			"stage_name":         stageName,
+			"is_disabled":        isDisabled,
+			"created_at":         createdAt,
+			"attempt_count":      attemptCount,
+			"average_percentage": averagePercentage,
+			"last_attempt_at":    lastAttemptAt,
+			"assigned_quizzes":   assignedQuizzes,
+		})
+	}
+
 	data := map[string]interface{}{
-		"ActiveQuizzes":   activeQuizzes,
-		"ArchivedQuizzes": archivedQuizzes,
+		"ActiveQuizzes":      activeQuizzes,
+		"ArchivedQuizzes":    archivedQuizzes,
+		"Students":           students,
+		"StudentRegistered":  r.URL.Query().Get("registered") == "student",
+		"RegisteredUsername": r.URL.Query().Get("username"),
+		"StudentAction":      r.URL.Query().Get("student_action"),
+		"StudentActionName":  r.URL.Query().Get("student_name"),
 	}
 	tmpl.Execute(w, data)
 }
 
 func CreateQuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/create_quiz.html"))
-	tmpl.Execute(w, nil)
+	stages, err := getStages()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, map[string]interface{}{
+		"Stages": stages,
+	})
+}
+
+func CreateStudentPageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/create_student.html"))
+	stages, err := getStages()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, map[string]interface{}{
+		"Stages": stages,
+	})
+}
+
+func SetStudentDisabledHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studentID, err := strconv.Atoi(vars["student_id"])
+	if err != nil {
+		http.Error(w, "Invalid student ID", http.StatusBadRequest)
+		return
+	}
+
+	disabled := vars["action"] == "disable"
+	if vars["action"] != "disable" && vars["action"] != "enable" {
+		http.Error(w, "Invalid action", http.StatusBadRequest)
+		return
+	}
+
+	var fullName string
+	var role string
+	err = database.DB.QueryRow("SELECT full_name, role FROM users WHERE id = ?", studentID).Scan(&fullName, &role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Student not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if role != "student" {
+		http.Error(w, "Only student accounts can be changed here", http.StatusBadRequest)
+		return
+	}
+
+	result, err := database.DB.Exec("UPDATE users SET is_disabled = ? WHERE id = ? AND role = 'student'", disabled, studentID)
+	if err != nil {
+		http.Error(w, "Failed to update student", http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Student not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":     "Student updated successfully",
+		"student_id":  studentID,
+		"full_name":   fullName,
+		"is_disabled": disabled,
+	})
+}
+
+func DeleteStudentHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studentID, err := strconv.Atoi(vars["student_id"])
+	if err != nil {
+		http.Error(w, "Invalid student ID", http.StatusBadRequest)
+		return
+	}
+
+	var fullName string
+	var role string
+	err = database.DB.QueryRow("SELECT full_name, role FROM users WHERE id = ?", studentID).Scan(&fullName, &role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Student not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if role != "student" {
+		http.Error(w, "Only student accounts can be deleted here", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+        DELETE FROM answers
+        WHERE attempt_id IN (
+            SELECT id FROM quiz_attempts WHERE user_id = ?
+        )
+    `, studentID); err != nil {
+		http.Error(w, "Failed to delete student answers", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.Exec("DELETE FROM quiz_attempts WHERE user_id = ?", studentID); err != nil {
+		http.Error(w, "Failed to delete student attempts", http.StatusInternalServerError)
+		return
+	}
+
+	result, err := tx.Exec("DELETE FROM users WHERE id = ? AND role = 'student'", studentID)
+	if err != nil {
+		http.Error(w, "Failed to delete student", http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Student not found", http.StatusNotFound)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to delete student", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":    "Student deleted successfully",
+		"student_id": studentID,
+		"full_name":  fullName,
+	})
 }
 
 func EditQuizPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +317,14 @@ func EditQuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tmpl := template.Must(template.ParseFiles("templates/edit_quiz.html"))
+	stages, err := getStages()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
 	tmpl.Execute(w, map[string]interface{}{
 		"QuizID": quizID,
+		"Stages": stages,
 	})
 }
 
@@ -119,6 +338,16 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	exists, err := stageExists(req.StageID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Please select a valid stage", http.StatusBadRequest)
 		return
 	}
 
@@ -136,8 +365,8 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert quiz
 	result, err := tx.Exec(
-		"INSERT INTO quizzes (title, description, created_by, lock_after_attempt) VALUES (?, ?, ?, ?)",
-		req.Title, req.Description, userID, req.shouldLockAfterAttempt(),
+		"INSERT INTO quizzes (title, description, created_by, stage_id, lock_after_attempt) VALUES (?, ?, ?, ?, ?)",
+		req.Title, req.Description, userID, req.StageID, req.shouldLockAfterAttempt(),
 	)
 	if err != nil {
 		http.Error(w, "Failed to create quiz", http.StatusInternalServerError)
@@ -188,9 +417,9 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quiz models.Quiz
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, lock_after_attempt FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, COALESCE(stage_id, 0), lock_after_attempt FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.LockAfterAttempt)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.LockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -270,6 +499,16 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	exists, err := stageExists(req.StageID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Please select a valid stage", http.StatusBadRequest)
+		return
+	}
+
 	tx, err := database.DB.Begin()
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -278,8 +517,8 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"UPDATE quizzes SET title = ?, description = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
-		req.Title, req.Description, req.shouldLockAfterAttempt(), quizID,
+		"UPDATE quizzes SET title = ?, description = ?, stage_id = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
+		req.Title, req.Description, req.StageID, req.shouldLockAfterAttempt(), quizID,
 	)
 	if err != nil {
 		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)

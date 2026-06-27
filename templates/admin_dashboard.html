@@ -10,6 +10,7 @@
     <nav class="navbar">
         <div class="nav-brand">🎓 Vocabulary Quiz - Admin</div>
         <div class="nav-user">
+            <a href="/admin/student/create" class="btn btn-secondary">Register Student</a>
             <a href="/admin/quiz/create" class="btn btn-primary">Create New Quiz</a>
             <a href="/logout" class="btn btn-secondary">Logout</a>
         </div>
@@ -17,9 +18,26 @@
 
     <div class="container">
         <div class="admin-header">
-            <h1>Manage Quizzes</h1>
+            <h1>Admin Dashboard</h1>
         </div>
 
+        {{if .StudentRegistered}}
+        <div class="alert alert-success dashboard-alert">
+            Student {{if .RegisteredUsername}}<strong>{{.RegisteredUsername}}</strong>{{end}} registered successfully.
+        </div>
+        {{end}}
+        {{if .StudentAction}}
+        <div class="alert alert-success dashboard-alert">
+            Student {{if .StudentActionName}}<strong>{{.StudentActionName}}</strong>{{end}} {{.StudentAction}} successfully.
+        </div>
+        {{end}}
+
+        <div class="dashboard-tabs" role="tablist" aria-label="Admin dashboard sections">
+            <a class="dashboard-tab active" href="#quizzes" data-dashboard-tab="quizzes" role="tab">Quizzes</a>
+            <a class="dashboard-tab" href="#students" data-dashboard-tab="students" role="tab">Students</a>
+        </div>
+
+        <section id="quizzesPanel" class="dashboard-panel active" data-dashboard-panel="quizzes">
         <div class="dashboard-section">
             <h2>Live Quizzes</h2>
             <div class="exam-table-wrap">
@@ -28,6 +46,7 @@
                         <tr>
                             <th>Exam / Quiz</th>
                             <th>Description</th>
+                            <th>Stage</th>
                             <th>Created</th>
                             <th>Created By</th>
                             <th>Lock</th>
@@ -39,6 +58,7 @@
                         <tr>
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
+                            <td><span class="badge badge-info">{{.stage_name}}</span></td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
                             <td>{{if .lock_after_attempt}}Yes{{else}}No{{end}}</td>
@@ -57,7 +77,7 @@
                         </tr>
                         {{else}}
                         <tr>
-                            <td class="empty-message" colspan="6">No live quizzes available.</td>
+                            <td class="empty-message" colspan="7">No live quizzes available.</td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -74,6 +94,7 @@
                         <tr>
                             <th>Exam / Quiz</th>
                             <th>Description</th>
+                            <th>Stage</th>
                             <th>Created</th>
                             <th>Created By</th>
                             <th>Status</th>
@@ -85,6 +106,7 @@
                         <tr>
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
+                            <td><span class="badge badge-info">{{.stage_name}}</span></td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
                             <td><span class="badge badge-warning">Archived</span></td>
@@ -103,6 +125,70 @@
         {{end}}
 
         <div id="resultsContainer" style="margin-top: 3rem;"></div>
+        </section>
+
+        <section id="studentsPanel" class="dashboard-panel" data-dashboard-panel="students">
+            <div class="dashboard-section">
+                <div class="section-heading">
+                    <h2>Students</h2>
+                    <a href="/admin/student/create" class="btn btn-primary">Register Student</a>
+                </div>
+                <div class="exam-table-wrap">
+                    <table class="exam-table student-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Stage</th>
+                                <th>Status</th>
+                                <th>Assigned Quizzes</th>
+                                <th>Attempts</th>
+                                <th>Average</th>
+                                <th>Last Attempt</th>
+                                <th>Registered</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .Students}}
+                            <tr>
+                                <td class="exam-title">
+                                    {{.full_name}}<br>
+                                    <span class="quiz-date">{{.username}}</span>
+                                </td>
+                                <td><span class="badge badge-info">{{.stage_name}}</span></td>
+                                <td>
+                                    {{if .is_disabled}}
+                                    <span class="badge badge-warning">Disabled</span>
+                                    {{else}}
+                                    <span class="badge badge-success">Active</span>
+                                    {{end}}
+                                </td>
+                                <td>{{.assigned_quizzes}}</td>
+                                <td>{{.attempt_count}}</td>
+                                <td>{{printf "%.1f" .average_percentage}}%</td>
+                                <td>{{.last_attempt_at}}</td>
+                                <td>{{.created_at}}</td>
+                                <td>
+                                    <div class="table-actions student-actions">
+                                        {{if .is_disabled}}
+                                        <button class="btn btn-secondary" onclick="enableStudent({{.id}}, '{{js .full_name}}')">Enable</button>
+                                        {{else}}
+                                        <button class="btn btn-secondary" onclick="disableStudent({{.id}}, '{{js .full_name}}')">Disable</button>
+                                        {{end}}
+                                        <button class="btn btn-danger" onclick="deleteStudent({{.id}}, '{{js .full_name}}')">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {{else}}
+                            <tr>
+                                <td class="empty-message" colspan="9">No students registered yet.</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
     </div>
 
     <script src="/static/js/app.js"></script>
