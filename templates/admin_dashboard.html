@@ -22,44 +22,82 @@
 
         <div class="dashboard-section">
             <h2>Live Quizzes</h2>
-            <div class="quiz-grid">
-                {{range .ActiveQuizzes}}
-                <div class="quiz-card">
-                    <h3>{{.title}}</h3>
-                    <p>{{.description}}</p>
-                    <p class="quiz-date">Created: {{.created_at}}</p>
-                    <p class="quiz-date">By: {{.created_by}}</p>
-                    <p class="quiz-date">Lock after completion: {{if .lock_after_attempt}}Yes{{else}}No{{end}}</p>
-                    <a class="btn btn-primary" href="/admin/quiz/{{.id}}/edit">Edit Questions</a>
-                    <button class="btn btn-primary" onclick="loadResults({{.id}})">View Results</button>
-                    <button class="btn btn-primary" onclick="loadProgressReport({{.id}})">Progress Report</button>
-                    {{if .lock_after_attempt}}
-                    <button class="btn btn-secondary" onclick="resetQuiz({{.id}})">Unlock Exam</button>
-                    {{end}}
-                    <button class="btn btn-secondary" onclick="archiveQuiz({{.id}})">Archive Exam</button>
-                    <button class="btn btn-danger" onclick="deleteQuiz({{.id}})">Delete Exam</button>
-                </div>
-                {{else}}
-                <p class="empty-message">No live quizzes available.</p>
-                {{end}}
+            <div class="exam-table-wrap">
+                <table class="exam-table">
+                    <thead>
+                        <tr>
+                            <th>Exam / Quiz</th>
+                            <th>Description</th>
+                            <th>Created</th>
+                            <th>Created By</th>
+                            <th>Lock</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .ActiveQuizzes}}
+                        <tr>
+                            <td class="exam-title">{{.title}}</td>
+                            <td class="exam-description">{{.description}}</td>
+                            <td>{{.created_at}}</td>
+                            <td>{{.created_by}}</td>
+                            <td>{{if .lock_after_attempt}}Yes{{else}}No{{end}}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <a class="btn btn-primary" href="/admin/quiz/{{.id}}/edit">Edit</a>
+                                    <button class="btn btn-primary" onclick="loadResults({{.id}})">Results</button>
+                                    <button class="btn btn-primary" onclick="loadProgressReport({{.id}})">Progress</button>
+                                    {{if .lock_after_attempt}}
+                                    <button class="btn btn-secondary" onclick="resetQuiz({{.id}})">Unlock</button>
+                                    {{end}}
+                                    <button class="btn btn-secondary" onclick="archiveQuiz({{.id}})">Archive</button>
+                                    <button class="btn btn-danger" onclick="deleteQuiz({{.id}})">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr>
+                            <td class="empty-message" colspan="6">No live quizzes available.</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
             </div>
         </div>
 
         {{if .ArchivedQuizzes}}
         <div class="dashboard-section archived-section">
             <h2>Archived Quizzes</h2>
-            <div class="quiz-grid">
-                {{range .ArchivedQuizzes}}
-                <div class="quiz-card archived-card">
-                    <h3>{{.title}}</h3>
-                    <p>{{.description}}</p>
-                    <p class="quiz-date">Created: {{.created_at}}</p>
-                    <p class="quiz-date">By: {{.created_by}}</p>
-                    <p class="quiz-date">Status: <span class="badge badge-warning">Archived</span></p>
-                    <button class="btn btn-secondary" onclick="unarchiveQuiz({{.id}})">Restore Exam</button>
-                    <button class="btn btn-danger" onclick="deleteQuiz({{.id}})">Delete Exam</button>
-                </div>
-                {{end}}
+            <div class="exam-table-wrap">
+                <table class="exam-table archived-table">
+                    <thead>
+                        <tr>
+                            <th>Exam / Quiz</th>
+                            <th>Description</th>
+                            <th>Created</th>
+                            <th>Created By</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .ArchivedQuizzes}}
+                        <tr>
+                            <td class="exam-title">{{.title}}</td>
+                            <td class="exam-description">{{.description}}</td>
+                            <td>{{.created_at}}</td>
+                            <td>{{.created_by}}</td>
+                            <td><span class="badge badge-warning">Archived</span></td>
+                            <td>
+                                <div class="table-actions">
+                                    <button class="btn btn-secondary" onclick="unarchiveQuiz({{.id}})">Restore</button>
+                                    <button class="btn btn-danger" onclick="deleteQuiz({{.id}})">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
             </div>
         </div>
         {{end}}

@@ -244,6 +244,76 @@ body {
     color: #999;
 }
 
+/* Exam Management Table */
+.exam-table-wrap {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    overflow-x: auto;
+}
+
+.exam-table {
+    width: 100%;
+    min-width: 920px;
+    border-collapse: collapse;
+}
+
+.exam-table th,
+.exam-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+}
+
+.exam-table th {
+    background: #f7f8fb;
+    color: #374151;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.exam-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.exam-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.exam-title {
+    color: #4f46e5;
+    font-weight: 700;
+    min-width: 180px;
+}
+
+.exam-description {
+    color: #4b5563;
+    min-width: 240px;
+    max-width: 380px;
+}
+
+.table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    min-width: 300px;
+}
+
+.table-actions .btn {
+    margin: 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.exam-table .empty-message {
+    color: #6b7280;
+    padding: 1.5rem;
+    text-align: center;
+}
+
 /* Question Card */
 .question-card {
     background: white;
