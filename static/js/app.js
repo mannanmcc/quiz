@@ -162,7 +162,6 @@ function addQuestion(question = {}) {
     const questionsDiv = document.getElementById('questionsContainer');
     const options = question.options || [];
     const correctIndex = question.correct_answer ? options.indexOf(question.correct_answer) + 1 : 0;
-    const questionType = question.question_type || 'meaning';
     const questionId = question.id || 0;
     
     const questionDiv = document.createElement('div');
@@ -175,15 +174,6 @@ function addQuestion(question = {}) {
             <button type="button" class="remove-question" onclick="removeQuestion(${questionCount})">Remove</button>
         </div>
         <input type="hidden" name="question_id_${questionCount}" value="${questionId}">
-        
-        <div class="form-group">
-            <label>Question Type</label>
-            <select name="question_type_${questionCount}" required>
-                <option value="meaning" ${questionType === 'meaning' ? 'selected' : ''}>Word Meaning</option>
-                <option value="synonym" ${questionType === 'synonym' ? 'selected' : ''}>Synonym</option>
-                <option value="antonym" ${questionType === 'antonym' ? 'selected' : ''}>Antonym</option>
-            </select>
-        </div>
         
         <div class="form-group">
             <label>Question Text</label>
@@ -247,6 +237,7 @@ async function submitQuiz(event, quizId = null) {
     const title = formData.get('quiz_title');
     const description = formData.get('quiz_description');
     const stageID = parseInt(formData.get('stage_id'), 10);
+    const timeLimitMinutes = parseInt(formData.get('time_limit_minutes') || '0', 10);
     const lockAfterAttempt = formData.get('do_not_lock_after_attempt') !== 'on';
     
     const questions = [];
@@ -255,7 +246,6 @@ async function submitQuiz(event, quizId = null) {
         if (!questionDiv) continue;
         
         const questionId = parseInt(formData.get(`question_id_${i}`) || '0');
-        const questionType = formData.get(`question_type_${i}`);
         const questionText = formData.get(`question_text_${i}`);
         const option1 = formData.get(`option1_${i}`);
         const option2 = formData.get(`option2_${i}`);
@@ -270,7 +260,7 @@ async function submitQuiz(event, quizId = null) {
         questions.push({
             id: questionId,
             question_text: questionText,
-            question_type: questionType,
+            question_type: 'meaning',
             correct_answer: correctAnswer,
             options: options,
             points: points
@@ -294,6 +284,7 @@ async function submitQuiz(event, quizId = null) {
                 title: title,
                 description: description,
                 stage_id: stageID,
+                time_limit_minutes: Number.isNaN(timeLimitMinutes) ? 0 : timeLimitMinutes,
                 lock_after_attempt: lockAfterAttempt,
                 questions: questions
             })
@@ -327,6 +318,7 @@ async function loadQuizForEdit(quizId) {
         form.elements.quiz_title.value = data.quiz.title || '';
         form.elements.quiz_description.value = data.quiz.description || '';
         form.elements.stage_id.value = data.quiz.stage_id || '';
+        form.elements.time_limit_minutes.value = data.quiz.time_limit_minutes || 0;
         form.elements.do_not_lock_after_attempt.checked = !Boolean(data.quiz.lock_after_attempt);
 
         const questionsDiv = document.getElementById('questionsContainer');

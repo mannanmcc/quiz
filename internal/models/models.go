@@ -19,6 +19,7 @@ type Quiz struct {
 	Description      string    `json:"description"`
 	CreatedBy        int       `json:"created_by"`
 	StageID          int       `json:"stage_id"`
+	TimeLimitMinutes int       `json:"time_limit_minutes"`
 	LockAfterAttempt bool      `json:"lock_after_attempt"`
 	CreatedAt        time.Time `json:"created_at"`
 }

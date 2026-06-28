@@ -51,7 +51,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get available quizzes
 	rows, err := database.DB.Query(`
-        SELECT id, title, description, created_at, unlock_version, lock_after_attempt
+        SELECT id, title, description, created_at, unlock_version, lock_after_attempt, COALESCE(time_limit_minutes, 0)
         FROM quizzes
         WHERE is_archived = 0 AND stage_id = ?
         ORDER BY created_at DESC
@@ -64,10 +64,10 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quizzes []map[string]interface{}
 	for rows.Next() {
-		var id, unlockVersion int
+		var id, unlockVersion, timeLimitMinutes int
 		var lockAfterAttempt bool
 		var title, description, createdAt string
-		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt)
+		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt, &timeLimitMinutes)
 
 		var attemptCount int
 		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
@@ -85,6 +85,7 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"attempts":           attemptCount,
 			"locked":             lockAfterAttempt && currentAttemptCount > 0,
 			"unlock_version":     unlockVersion,
+			"time_limit_minutes": timeLimitMinutes,
 			"lock_after_attempt": lockAfterAttempt,
 		})
 	}
@@ -139,9 +140,9 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var unlockVersion int
 	var isArchived bool
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, unlock_version, COALESCE(time_limit_minutes, 0), lock_after_attempt, is_archived FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.LockAfterAttempt, &isArchived)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt, &isArchived)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -421,21 +422,15 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	attemptID, _ := result.LastInsertId()
 
-	// Insert answers
-	for questionIDStr, selectedAnswer := range req.Answers {
-		questionID, _ := strconv.Atoi(questionIDStr)
-
-		var correctAnswer string
-		err := tx.QueryRow("SELECT correct_answer FROM questions WHERE id = ? AND quiz_id = ?", questionID, quizID).Scan(&correctAnswer)
-		if err != nil {
+	for _, item := range report {
+		selectedAnswer, _ := item["selected_answer"].(string)
+		if selectedAnswer == "" {
 			continue
 		}
 
-		isCorrect := selectedAnswer == correctAnswer
-
 		tx.Exec(
 			"INSERT INTO answers (attempt_id, question_id, selected_answer, is_correct) VALUES (?, ?, ?, ?)",
-			attemptID, questionID, selectedAnswer, isCorrect,
+			attemptID, item["question_id"], selectedAnswer, item["is_correct"],
 		)
 	}
 

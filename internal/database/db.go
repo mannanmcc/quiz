@@ -51,6 +51,7 @@ func createTables() {
         created_by INTEGER,
         stage_id INTEGER,
         unlock_version INTEGER DEFAULT 0,
+        time_limit_minutes INTEGER DEFAULT 0,
         lock_after_attempt BOOLEAN DEFAULT 1,
         is_archived BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +104,7 @@ func createTables() {
 	addColumnIfMissing("quizzes", "lock_after_attempt", "BOOLEAN DEFAULT 1")
 	addColumnIfMissing("quizzes", "is_archived", "BOOLEAN DEFAULT 0")
 	addColumnIfMissing("quizzes", "stage_id", "INTEGER")
+	addColumnIfMissing("quizzes", "time_limit_minutes", "INTEGER DEFAULT 0")
 	addColumnIfMissing("users", "stage_id", "INTEGER")
 	addColumnIfMissing("users", "is_disabled", "BOOLEAN DEFAULT 0")
 	addColumnIfMissing("quiz_attempts", "unlock_version", "INTEGER DEFAULT 0")

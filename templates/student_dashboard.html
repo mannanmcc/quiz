@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260627-user-admin">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
 </head>
 <body>
     <nav class="navbar">
@@ -25,6 +25,7 @@
                 <h3>{{.title}}</h3>
                 <p>{{.description}}</p>
                 <p class="quiz-date">Created: {{.created_at}}</p>
+                <p class="quiz-date">Time limit: {{if .time_limit_minutes}}{{.time_limit_minutes}} minutes{{else}}No timer{{end}}</p>
                 {{if .attempts}}
                 <span class="badge badge-success">{{.attempts}} attempt(s)</span>
                 {{end}}

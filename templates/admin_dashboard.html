@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260627-user-admin">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
 </head>
 <body>
     <nav class="navbar">
@@ -47,6 +47,7 @@
                             <th>Exam / Quiz</th>
                             <th>Description</th>
                             <th>Stage</th>
+                            <th>Time Limit</th>
                             <th>Created</th>
                             <th>Created By</th>
                             <th>Lock</th>
@@ -59,6 +60,7 @@
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
                             <td><span class="badge badge-info">{{.stage_name}}</span></td>
+                            <td>{{if .time_limit_minutes}}{{.time_limit_minutes}} min{{else}}None{{end}}</td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
                             <td>{{if .lock_after_attempt}}Yes{{else}}No{{end}}</td>
@@ -77,7 +79,7 @@
                         </tr>
                         {{else}}
                         <tr>
-                            <td class="empty-message" colspan="7">No live quizzes available.</td>
+                            <td class="empty-message" colspan="8">No live quizzes available.</td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -95,6 +97,7 @@
                             <th>Exam / Quiz</th>
                             <th>Description</th>
                             <th>Stage</th>
+                            <th>Time Limit</th>
                             <th>Created</th>
                             <th>Created By</th>
                             <th>Status</th>
@@ -107,6 +110,7 @@
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
                             <td><span class="badge badge-info">{{.stage_name}}</span></td>
+                            <td>{{if .time_limit_minutes}}{{.time_limit_minutes}} min{{else}}None{{end}}</td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
                             <td><span class="badge badge-warning">Archived</span></td>
@@ -191,6 +195,6 @@
         </section>
     </div>
 
-    <script src="/static/js/app.js?v=20260627-user-admin"></script>
+    <script src="/static/js/app.js?v=20260628-remove-debug-badge"></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ type saveQuizRequest struct {
 	Title            string                `json:"title"`
 	Description      string                `json:"description"`
 	StageID          int                   `json:"stage_id"`
+	TimeLimitMinutes int                   `json:"time_limit_minutes"`
 	LockAfterAttempt *bool                 `json:"lock_after_attempt"`
 	Questions        []quizQuestionRequest `json:"questions"`
 }
@@ -42,7 +43,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get all quizzes
 	rows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived, COALESCE(s.name, 'General')
+        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived, COALESCE(s.name, 'General'), COALESCE(q.time_limit_minutes, 0)
         FROM quizzes q
         JOIN users u ON q.created_by = u.id
         LEFT JOIN stages s ON q.stage_id = s.id
@@ -58,10 +59,11 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	var archivedQuizzes []map[string]interface{} = []map[string]interface{}{}
 	for rows.Next() {
 		var id int
+		var timeLimitMinutes int
 		var lockAfterAttempt bool
 		var isArchived bool
 		var title, description, createdAt, createdBy, stageName string
-		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived, &stageName)
+		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived, &stageName, &timeLimitMinutes)
 		quiz := map[string]interface{}{
 			"id":                 id,
 			"title":              title,
@@ -69,6 +71,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"created_at":         createdAt,
 			"created_by":         createdBy,
 			"stage_name":         stageName,
+			"time_limit_minutes": timeLimitMinutes,
 			"lock_after_attempt": lockAfterAttempt,
 			"is_archived":        isArchived,
 		}
@@ -350,6 +353,10 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Please select a valid stage", http.StatusBadRequest)
 		return
 	}
+	if req.TimeLimitMinutes < 0 {
+		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
+		return
+	}
 
 	// Get user ID from session
 	session, _ := middleware.Store.Get(r, "session")
@@ -365,8 +372,8 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert quiz
 	result, err := tx.Exec(
-		"INSERT INTO quizzes (title, description, created_by, stage_id, lock_after_attempt) VALUES (?, ?, ?, ?, ?)",
-		req.Title, req.Description, userID, req.StageID, req.shouldLockAfterAttempt(),
+		"INSERT INTO quizzes (title, description, created_by, stage_id, time_limit_minutes, lock_after_attempt) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Title, req.Description, userID, req.StageID, req.TimeLimitMinutes, req.shouldLockAfterAttempt(),
 	)
 	if err != nil {
 		http.Error(w, "Failed to create quiz", http.StatusInternalServerError)
@@ -417,9 +424,9 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quiz models.Quiz
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, COALESCE(stage_id, 0), lock_after_attempt FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, COALESCE(stage_id, 0), COALESCE(time_limit_minutes, 0), lock_after_attempt FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.LockAfterAttempt)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -508,6 +515,10 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Please select a valid stage", http.StatusBadRequest)
 		return
 	}
+	if req.TimeLimitMinutes < 0 {
+		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
+		return
+	}
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -517,8 +528,8 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"UPDATE quizzes SET title = ?, description = ?, stage_id = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
-		req.Title, req.Description, req.StageID, req.shouldLockAfterAttempt(), quizID,
+		"UPDATE quizzes SET title = ?, description = ?, stage_id = ?, time_limit_minutes = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
+		req.Title, req.Description, req.StageID, req.TimeLimitMinutes, req.shouldLockAfterAttempt(), quizID,
 	)
 	if err != nil {
 		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)

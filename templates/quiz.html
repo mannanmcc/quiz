@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Take Quiz</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260627-user-admin">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
 </head>
 <body>
     <nav class="navbar">
@@ -14,17 +14,22 @@
         </div>
     </nav>
 
-    <div class="debug-badge">QUIZ PAGE V2</div>
-
     <div class="container">
-        <div id="quizContainer">
-            <h1 id="quizTitle">Loading...</h1>
-            <p id="quizDescription"></p>
-            
-            <form id="quizForm">
-                <div id="questionsContainer"></div>
-                <button type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
-            </form>
+        <div id="quizContainer" class="quiz-taking-layout">
+            <main class="quiz-main">
+                <h1 id="quizTitle">Loading...</h1>
+                <p id="quizDescription"></p>
+                
+                <form id="quizForm" novalidate>
+                    <div id="questionsContainer"></div>
+                    <button id="submitQuizButton" type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
+                </form>
+            </main>
+
+            <aside id="timerPanel" class="timer-panel" style="display: none;">
+                <span class="timer-label">Time Remaining</span>
+                <strong id="timerDisplay">--:--</strong>
+            </aside>
         </div>
 
         <div id="resultsContainer" style="display: none;">
@@ -44,20 +49,16 @@
 
     <script>
         const quizId = "{{.QuizID}}";
-        console.log('quiz page loaded v2');
+        let timerInterval = null;
+        let remainingSeconds = 0;
+        let quizSubmitted = false;
         console.log('submit endpoint', `/student/api/quiz/${quizId}/submit`);
-
-        function questionTypeLabel(type) {
-            if (type === 'meaning') return 'Meaning';
-            if (type === 'synonym') return 'Synonym';
-            if (type === 'antonym') return 'Antonym';
-            return 'Question';
-        }
 
         function showLoadError(message) {
             document.getElementById('quizTitle').textContent = 'Unable to load quiz';
             document.getElementById('quizDescription').textContent = message;
             document.getElementById('quizForm').style.display = 'none';
+            document.getElementById('timerPanel').style.display = 'none';
         }
 
         function escapeHTML(str) {
@@ -114,15 +115,11 @@
             number.className = 'question-number';
             number.textContent = `Question ${index + 1}`;
 
-            const type = document.createElement('span');
-            type.className = 'question-type';
-            type.textContent = questionTypeLabel(q.question_type);
-
             const points = document.createElement('span');
             points.className = 'question-points';
             points.textContent = `${q.points} point(s)`;
 
-            header.append(number, type, points);
+            header.append(number, points);
 
             const title = document.createElement('h3');
             title.textContent = q.question_text;
@@ -138,7 +135,6 @@
                 input.type = 'radio';
                 input.name = `question_${q.id}`;
                 input.value = option;
-                input.required = true;
 
                 const text = document.createElement('span');
                 text.textContent = option;
@@ -149,6 +145,40 @@
 
             questionDiv.append(header, title, optionsContainer);
             return questionDiv;
+        }
+
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function updateTimerDisplay() {
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerPanel = document.getElementById('timerPanel');
+            timerDisplay.textContent = formatTime(Math.max(remainingSeconds, 0));
+            timerPanel.classList.toggle('timer-warning', remainingSeconds <= 60);
+        }
+
+        function startTimer(minutes) {
+            if (!minutes || minutes <= 0) {
+                document.getElementById('timerPanel').style.display = 'none';
+                return;
+            }
+
+            remainingSeconds = minutes * 60;
+            document.getElementById('timerPanel').style.display = 'block';
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                remainingSeconds -= 1;
+                updateTimerDisplay();
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    submitQuiz(true);
+                }
+            }, 1000);
         }
 
         async function loadQuiz() {
@@ -162,6 +192,7 @@
 
                 document.getElementById('quizTitle').textContent = data.quiz.title;
                 document.getElementById('quizDescription').textContent = data.quiz.description || '';
+                startTimer(data.quiz.time_limit_minutes || 0);
 
                 const container = document.getElementById('questionsContainer');
                 container.innerHTML = '';
@@ -180,10 +211,21 @@
             }
         }
 
-        document.getElementById('quizForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        async function submitQuiz(isAutoSubmit = false) {
+            if (quizSubmitted) {
+                return;
+            }
+            quizSubmitted = true;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
 
-            const formData = new FormData(e.target);
+            const form = document.getElementById('quizForm');
+            const submitButton = document.getElementById('submitQuizButton');
+            submitButton.disabled = true;
+            submitButton.textContent = isAutoSubmit ? 'Submitting time-expired exam...' : 'Submitting...';
+
+            const formData = new FormData(form);
             const answers = {};
 
             for (let [key, value] of formData.entries()) {
@@ -212,6 +254,7 @@
 
                 document.getElementById('quizContainer').style.display = 'none';
                 document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('timerPanel').style.display = 'none';
                 document.getElementById('reportDebug').innerHTML = `<pre>report payload: ${escapeHTML(JSON.stringify(result.report, null, 2))}</pre>`;
                 document.getElementById('finalScore').textContent =
                     `${result.score} / ${result.max_score}`;
@@ -220,8 +263,16 @@
                 renderFeedbackReport(result.report);
             } catch (error) {
                 console.error('Error submitting quiz:', error);
+                quizSubmitted = false;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Quiz';
                 alert('Failed to submit quiz. Please try again.');
             }
+        }
+
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitQuiz(false);
         });
 
         loadQuiz();
