@@ -3,28 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Vocabulary Quiz</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
+    <title>Login - QUIZ</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260704-email-reset">
 </head>
 <body>
     <div class="login-container">
         <div class="login-box">
-            <h1>🎓 Vocabulary Quiz</h1>
+            <h1>🎓 QUIZ</h1>
             <h2>Login</h2>
+            {{if .Error}}
+            <div class="login-error" role="alert">
+                <strong>Login failed</strong>
+                <span>{{.Error}}</span>
+            </div>
+            {{end}}
             <form action="/login" method="POST">
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required>
+                    <input type="text" id="username" name="username" value="{{.Username}}" class="{{if .Error}}input-error{{end}}" required>
                 </div>
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" class="{{if .Error}}input-error{{end}}" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Login</button>
             </form>
             <div class="register-link">
+                <p><a href="#" id="showForgotPassword">Forgot password?</a></p>
                 <p>New student? <a href="#" id="showRegister">Register here</a></p>
             </div>
+        </div>
+
+        <div class="forgot-box" id="forgotBox" style="display: none;">
+            <h2>Reset Password</h2>
+            <div id="forgotMessage" class="alert" style="display: none;"></div>
+            <form id="forgotPasswordForm">
+                <div class="form-group">
+                    <label for="forgot_email">Email</label>
+                    <input type="email" id="forgot_email" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Send Reset Link</button>
+                <button type="button" class="btn btn-secondary" id="cancelForgotPassword">Cancel</button>
+            </form>
         </div>
 
         <div class="register-box" id="registerBox" style="display: none;">
@@ -37,6 +57,10 @@
                 <div class="form-group">
                     <label for="reg_username">Username</label>
                     <input type="text" id="reg_username" required>
+                </div>
+                <div class="form-group">
+                    <label for="reg_email">Email</label>
+                    <input type="email" id="reg_email" required>
                 </div>
                 <div class="form-group">
                     <label for="reg_password">Password</label>
@@ -57,6 +81,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260628-remove-debug-badge"></script>
+    <script src="/static/js/app.js?v=20260704-email-reset"></script>
 </body>
 </html>

@@ -1,21 +1,45 @@
 // Login/Register Toggle
 document.addEventListener('DOMContentLoaded', function() {
     const showRegister = document.getElementById('showRegister');
+    const showForgotPassword = document.getElementById('showForgotPassword');
     const cancelRegister = document.getElementById('cancelRegister');
+    const cancelForgotPassword = document.getElementById('cancelForgotPassword');
     const registerBox = document.getElementById('registerBox');
+    const forgotBox = document.getElementById('forgotBox');
     const loginBox = document.querySelector('.login-box');
     const registerForm = document.getElementById('registerForm');
+    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+    const forgotMessage = document.getElementById('forgotMessage');
 
     if (showRegister) {
         showRegister.addEventListener('click', function(e) {
             e.preventDefault();
             loginBox.style.display = 'none';
+            forgotBox.style.display = 'none';
             registerBox.style.display = 'block';
+        });
+    }
+
+    if (showForgotPassword) {
+        showForgotPassword.addEventListener('click', function(e) {
+            e.preventDefault();
+            loginBox.style.display = 'none';
+            registerBox.style.display = 'none';
+            forgotBox.style.display = 'block';
         });
     }
 
     if (cancelRegister) {
         cancelRegister.addEventListener('click', function() {
+            registerBox.style.display = 'none';
+            forgotBox.style.display = 'none';
+            loginBox.style.display = 'block';
+        });
+    }
+
+    if (cancelForgotPassword) {
+        cancelForgotPassword.addEventListener('click', function() {
+            forgotBox.style.display = 'none';
             registerBox.style.display = 'none';
             loginBox.style.display = 'block';
         });
@@ -27,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const fullName = document.getElementById('reg_fullname').value;
             const username = document.getElementById('reg_username').value;
+            const email = document.getElementById('reg_email').value;
             const password = document.getElementById('reg_password').value;
             const stageID = parseInt(document.getElementById('reg_stage').value, 10);
 
@@ -39,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         full_name: fullName,
                         username: username,
+                        email: email,
                         password: password,
                         stage_id: stageID
                     })
@@ -60,6 +86,46 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    if (forgotPasswordForm) {
+        forgotPasswordForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('forgot_email').value;
+            forgotMessage.style.display = 'none';
+            forgotMessage.className = 'alert';
+
+            try {
+                const response = await fetch('/api/password-reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+
+                const message = await response.text();
+                forgotMessage.style.display = 'block';
+                if (response.ok) {
+                    forgotMessage.classList.add('alert-success');
+                    try {
+                        forgotMessage.textContent = JSON.parse(message).message;
+                    } catch (_) {
+                        forgotMessage.textContent = 'If an account uses that email, a password reset link has been sent.';
+                    }
+                    forgotPasswordForm.reset();
+                } else {
+                    forgotMessage.classList.add('alert-error');
+                    forgotMessage.textContent = message || 'Could not send reset link. Please try again.';
+                }
+            } catch (error) {
+                forgotMessage.style.display = 'block';
+                forgotMessage.classList.add('alert-error');
+                forgotMessage.textContent = 'Could not send reset link. Please try again.';
+                console.error('Error:', error);
+            }
+        });
+    }
+
     const adminCreateStudentForm = document.getElementById('adminCreateStudentForm');
     if (adminCreateStudentForm) {
         adminCreateStudentForm.addEventListener('submit', async function(e) {
@@ -67,6 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const fullName = document.getElementById('student_fullname').value;
             const username = document.getElementById('student_username').value;
+            const email = document.getElementById('student_email').value;
             const password = document.getElementById('student_password').value;
             const stageID = parseInt(document.getElementById('student_stage').value, 10);
 
@@ -79,6 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         full_name: fullName,
                         username: username,
+                        email: email,
                         password: password,
                         stage_id: stageID
                     })

@@ -22,6 +22,25 @@ Then restart the app process on the server. Dashboard structure comes from
 `templates/admin_dashboard.html`, and the tab/buttons use `static/js/app.js`;
 uploading only `static/css/style.css` will not update the dashboard.
 
+Email features need SMTP settings on the server:
+
+```bash
+export APP_BASE_URL="https://your-domain.example"
+export EMAIL_SENDING_ENABLED="true"
+export SMTP_HOST="smtp.example.com"
+export SMTP_PORT="587"
+export SMTP_USERNAME="your-smtp-username"
+export SMTP_PASSWORD="your-smtp-password"
+export SMTP_FROM="QUIZ <no-reply@your-domain.example>"
+```
+
+Email sending is disabled unless `EMAIL_SENDING_ENABLED` is set to `true`,
+`1`, `yes`, or `on`.
+
+Registration emails and password reset links are skipped when `SMTP_HOST` and
+`SMTP_FROM` are not configured, so local development can still run without a
+mail account.
+
 
 
 Note:

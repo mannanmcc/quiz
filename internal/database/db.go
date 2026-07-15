@@ -33,8 +33,19 @@ func createTables() {
         role TEXT NOT NULL,
         full_name TEXT NOT NULL,
         stage_id INTEGER,
+        email TEXT,
         is_disabled BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at DATETIME NOT NULL,
+        used_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS stages (
@@ -106,6 +117,7 @@ func createTables() {
 	addColumnIfMissing("quizzes", "stage_id", "INTEGER")
 	addColumnIfMissing("quizzes", "time_limit_minutes", "INTEGER DEFAULT 0")
 	addColumnIfMissing("users", "stage_id", "INTEGER")
+	addColumnIfMissing("users", "email", "TEXT")
 	addColumnIfMissing("users", "is_disabled", "BOOLEAN DEFAULT 0")
 	addColumnIfMissing("quiz_attempts", "unlock_version", "INTEGER DEFAULT 0")
 

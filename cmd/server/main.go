@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"vocabulary-quiz-app/internal/config"
 	"vocabulary-quiz-app/internal/database"
 	"vocabulary-quiz-app/internal/handlers"
 	"vocabulary-quiz-app/internal/middleware"
@@ -12,6 +13,8 @@ import (
 )
 
 func main() {
+	config.LoadLocalEnv()
+
 	// Initialize database
 	if err := database.InitDB(); err != nil {
 		log.Fatal("Failed to initialize database:", err)
@@ -27,6 +30,9 @@ func main() {
 	r.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
 	r.HandleFunc("/logout", handlers.LogoutHandler).Methods("GET")
 	r.HandleFunc("/api/register", handlers.RegisterStudentHandler).Methods("POST")
+	r.HandleFunc("/api/password-reset", handlers.ForgotPasswordHandler).Methods("POST")
+	r.HandleFunc("/reset-password", handlers.ResetPasswordPageHandler).Methods("GET")
+	r.HandleFunc("/reset-password", handlers.ResetPasswordHandler).Methods("POST")
 
 	// Student routes
 	studentRouter := r.PathPrefix("/student").Subrouter()
