@@ -712,6 +712,21 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	var quizTitle string
+	if err := tx.QueryRow("SELECT title FROM quizzes WHERE id = ?", quizID).Scan(&quizTitle); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Quiz not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = tx.Exec("INSERT OR IGNORE INTO deleted_seed_quizzes (title) VALUES (?)", quizTitle); err != nil {
+		http.Error(w, "Failed to record quiz deletion", http.StatusInternalServerError)
+		return
+	}
+
 	if _, err = tx.Exec(`
         DELETE FROM answers
         WHERE attempt_id IN (

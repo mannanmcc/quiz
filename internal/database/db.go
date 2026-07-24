@@ -105,6 +105,11 @@ func createTables() {
         FOREIGN KEY (attempt_id) REFERENCES quiz_attempts(id) ON DELETE CASCADE,
         FOREIGN KEY (question_id) REFERENCES questions(id)
     );
+
+    CREATE TABLE IF NOT EXISTS deleted_seed_quizzes (
+        title TEXT PRIMARY KEY,
+        deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
     `
 
 	_, err := DB.Exec(schema)
@@ -128,7 +133,6 @@ func createTables() {
 	// Create default admin user
 	createDefaultAdmin()
 	runSeedFileIfPresent("seed_year5_vocabulary_exams.sql")
-	runSeedFileIfPresent("seed_year5_vocabulary_8_pages_exams.sql")
 }
 
 func runSeedFileIfPresent(path string) {

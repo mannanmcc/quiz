@@ -192,6 +192,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
         SELECT id, question_text, question_type, option1, option2, option3, option4, points
         FROM questions
         WHERE quiz_id = ?
+        ORDER BY id
     `, quizID)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
