@@ -39,6 +39,7 @@ func main() {
 	studentRouter.Use(middleware.AuthMiddleware)
 	studentRouter.HandleFunc("/dashboard", handlers.StudentDashboardHandler).Methods("GET")
 	studentRouter.HandleFunc("/quiz/{quiz_id}", handlers.QuizPageHandler).Methods("GET")
+	studentRouter.HandleFunc("/attempt/{attempt_id}/report.pdf", handlers.StudentAttemptReportPDFHandler).Methods("GET")
 	studentRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.GetQuizHandler).Methods("GET")
 	studentRouter.HandleFunc("/api/quiz/{quiz_id}/submit", handlers.SubmitQuizHandler).Methods("POST")
 

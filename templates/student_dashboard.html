@@ -48,6 +48,7 @@
                     <th>Score</th>
                     <th>Percentage</th>
                     <th>Date</th>
+                    <th>Report</th>
                 </tr>
             </thead>
             <tbody>
@@ -57,6 +58,7 @@
                     <td>{{.score}}/{{.max_score}}</td>
                     <td>{{printf "%.1f" .percentage}}%</td>
                     <td>{{.completed_at}}</td>
+                    <td><a href="/student/attempt/{{.attempt_id}}/report.pdf" class="btn btn-secondary btn-small" target="_blank">PDF</a></td>
                 </tr>
                 {{end}}
             </tbody>

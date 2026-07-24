@@ -191,6 +191,11 @@ body {
     background: #5a6268;
 }
 
+.btn-small {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+}
+
 .btn-danger {
     background: #dc3545;
     color: white;

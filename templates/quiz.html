@@ -37,6 +37,7 @@
             <div class="results-box">
                 <h2>Your Score: <span id="finalScore"></span></h2>
                 <p id="finalPercentage"></p>
+                <a id="downloadReportLink" href="#" class="btn btn-secondary" target="_blank" style="display: none;">Download PDF Report</a>
             </div>
             <section id="reportSection">
                 <h2>Review Your Answers</h2>
@@ -78,13 +79,11 @@
 
             if (!Array.isArray(report)) {
                 reportContainer.innerHTML = '<p>No answer report available.</p>';
-                debugContainer.innerHTML = `<pre>report: ${escapeHTML(JSON.stringify(report, null, 2))}</pre>`;
                 return;
             }
 
             if (report.length === 0) {
                 reportContainer.innerHTML = '<p>No answer report available.</p>';
-                debugContainer.innerHTML = `<pre>report.length = 0</pre>`;
                 return;
             }
 
@@ -255,11 +254,15 @@
                 document.getElementById('quizContainer').style.display = 'none';
                 document.getElementById('resultsContainer').style.display = 'block';
                 document.getElementById('timerPanel').style.display = 'none';
-                document.getElementById('reportDebug').innerHTML = `<pre>report payload: ${escapeHTML(JSON.stringify(result.report, null, 2))}</pre>`;
                 document.getElementById('finalScore').textContent =
                     `${result.score} / ${result.max_score}`;
                 document.getElementById('finalPercentage').textContent =
                     `Percentage: ${result.percentage.toFixed(1)}%`;
+                if (result.report_pdf_url) {
+                    const reportLink = document.getElementById('downloadReportLink');
+                    reportLink.href = result.report_pdf_url;
+                    reportLink.style.display = 'inline-block';
+                }
                 renderFeedbackReport(result.report);
             } catch (error) {
                 console.error('Error submitting quiz:', error);
