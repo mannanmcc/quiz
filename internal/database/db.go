@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"log"
+	"os"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -126,6 +127,22 @@ func createTables() {
 
 	// Create default admin user
 	createDefaultAdmin()
+	runSeedFileIfPresent("seed_year5_vocabulary_exams.sql")
+	runSeedFileIfPresent("seed_year5_vocabulary_8_pages_exams.sql")
+}
+
+func runSeedFileIfPresent(path string) {
+	seedSQL, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		log.Fatal("Error reading seed file:", err)
+	}
+
+	if _, err := DB.Exec(string(seedSQL)); err != nil {
+		log.Fatal("Error running seed file:", err)
+	}
 }
 
 func addColumnIfMissing(tableName, columnName, columnDefinition string) {
