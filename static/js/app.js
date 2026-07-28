@@ -165,6 +165,48 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const adminEditStudentForm = document.getElementById('adminEditStudentForm');
+    if (adminEditStudentForm) {
+        adminEditStudentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const studentID = adminEditStudentForm.dataset.studentId;
+            const fullName = document.getElementById('student_fullname').value;
+            const username = document.getElementById('student_username').value;
+            const email = document.getElementById('student_email').value;
+            const password = document.getElementById('student_password').value;
+            const stageID = parseInt(document.getElementById('student_stage').value, 10);
+            const isDisabled = document.getElementById('student_disabled').checked;
+
+            try {
+                const response = await fetch(`/admin/api/student/${studentID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        username: username,
+                        email: email,
+                        password: password,
+                        stage_id: stageID,
+                        is_disabled: isDisabled
+                    })
+                });
+
+                if (response.ok) {
+                    window.location.href = `/admin/dashboard?student_action=updated&student_name=${encodeURIComponent(fullName)}#students`;
+                } else {
+                    const error = await response.text();
+                    alert('Update failed: ' + error);
+                }
+            } catch (error) {
+                alert('Update failed. Please try again.');
+                console.error('Error:', error);
+            }
+        });
+    }
+
     if (window.editQuizID) {
         loadQuizForEdit(window.editQuizID);
     }
@@ -223,6 +265,11 @@ function escapeHTML(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function revealReportPanel(resultsDiv) {
+    resultsDiv.style.display = 'block';
+    resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function addQuestion(question = {}) {
@@ -403,21 +450,30 @@ async function loadQuizForEdit(quizId) {
 
 // Load Quiz Results
 async function loadResults(quizId) {
+    const resultsDiv = document.getElementById('resultsContainer');
+    if (!resultsDiv) {
+        alert('Results area is missing on this page.');
+        return;
+    }
+
+    resultsDiv.innerHTML = '<h2>Student Results</h2><p>Loading results...</p>';
+    revealReportPanel(resultsDiv);
+
     try {
         const response = await fetch(`/admin/api/quiz/${quizId}/results`);
         if (!response.ok) {
             const error = await response.text();
+            resultsDiv.innerHTML = '<h2>Student Results</h2><p>Could not load results.</p>';
             alert('Failed to load results: ' + error);
             return;
         }
 
         const results = await response.json();
-        
-        const resultsDiv = document.getElementById('resultsContainer');
         resultsDiv.innerHTML = '<h2>Student Results</h2>';
         
         if (!Array.isArray(results) || results.length === 0) {
             resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
+            revealReportPanel(resultsDiv);
             return;
         }
         
@@ -436,41 +492,54 @@ async function loadResults(quizId) {
         `;
         
         results.forEach(result => {
+            const percentage = Number(result.percentage || 0);
             tableHTML += `
                 <tr>
                     <td>${escapeHTML(result.full_name)}</td>
                     <td>${escapeHTML(result.username)}</td>
                     <td>${result.score}/${result.max_score}</td>
-                    <td>${result.percentage.toFixed(1)}%</td>
-                    <td>${new Date(result.completed_at).toLocaleString()}</td>
+                    <td>${percentage.toFixed(1)}%</td>
+                    <td>${escapeHTML(new Date(result.completed_at).toLocaleString())}</td>
                 </tr>
             `;
         });
         
         tableHTML += '</tbody></table>';
         resultsDiv.innerHTML += tableHTML;
+        revealReportPanel(resultsDiv);
         
     } catch (error) {
         console.error('Error loading results:', error);
+        resultsDiv.innerHTML = '<h2>Student Results</h2><p>Could not load results.</p>';
         alert('Failed to load results');
     }
 }
 
 async function loadProgressReport(quizId) {
+    const resultsDiv = document.getElementById('resultsContainer');
+    if (!resultsDiv) {
+        alert('Results area is missing on this page.');
+        return;
+    }
+
+    resultsDiv.innerHTML = '<h2>Progress Report</h2><p>Loading progress report...</p>';
+    revealReportPanel(resultsDiv);
+
     try {
         const response = await fetch(`/admin/api/quiz/${quizId}/progress`);
         if (!response.ok) {
             const error = await response.text();
+            resultsDiv.innerHTML = '<h2>Progress Report</h2><p>Could not load progress report.</p>';
             alert('Failed to load progress report: ' + error);
             return;
         }
 
         const reports = await response.json();
-        const resultsDiv = document.getElementById('resultsContainer');
         resultsDiv.innerHTML = '<h2>Progress Report</h2>';
 
         if (!Array.isArray(reports) || reports.length === 0) {
             resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
+            revealReportPanel(resultsDiv);
             return;
         }
 
@@ -512,8 +581,10 @@ async function loadProgressReport(quizId) {
 
         tableHTML += '</tbody></table>';
         resultsDiv.innerHTML += tableHTML;
+        revealReportPanel(resultsDiv);
     } catch (error) {
         console.error('Error loading progress report:', error);
+        resultsDiv.innerHTML = '<h2>Progress Report</h2><p>Could not load progress report.</p>';
         alert('Failed to load progress report');
     }
 }

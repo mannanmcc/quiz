@@ -298,6 +298,20 @@ body {
     margin-bottom: 0;
 }
 
+.report-panel {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    margin-top: 3rem;
+    padding: 1.5rem;
+}
+
+.report-panel .results-table {
+    border: 1px solid #e5e7eb;
+    box-shadow: none;
+    margin-bottom: 0;
+}
+
 .archived-section {
     padding-top: 1rem;
     border-top: 1px solid rgba(102, 126, 234, 0.18);

@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"vocabulary-quiz-app/internal/database"
 	"vocabulary-quiz-app/internal/middleware"
 	"vocabulary-quiz-app/internal/models"
@@ -182,6 +183,157 @@ func CreateStudentPageHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, map[string]interface{}{
 		"Stages": stages,
 	})
+}
+
+func EditStudentPageHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studentID, err := strconv.Atoi(vars["student_id"])
+	if err != nil {
+		http.Error(w, "Invalid student ID", http.StatusBadRequest)
+		return
+	}
+
+	var id, stageID int
+	var fullName, username, email string
+	var isDisabled bool
+	err = database.DB.QueryRow(`
+		SELECT id, full_name, username, COALESCE(email, ''), COALESCE(stage_id, 0), COALESCE(is_disabled, 0)
+		FROM users
+		WHERE id = ? AND role = 'student'
+	`, studentID).Scan(&id, &fullName, &username, &email, &stageID, &isDisabled)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Student not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	stages, err := getStages()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	tmpl := template.Must(template.ParseFiles("templates/edit_student.html"))
+	tmpl.Execute(w, map[string]interface{}{
+		"Student": map[string]interface{}{
+			"id":          id,
+			"full_name":   fullName,
+			"username":    username,
+			"email":       email,
+			"stage_id":    stageID,
+			"is_disabled": isDisabled,
+		},
+		"Stages": stages,
+	})
+}
+
+func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	studentID, err := strconv.Atoi(vars["student_id"])
+	if err != nil {
+		http.Error(w, "Invalid student ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		FullName   string `json:"full_name"`
+		Email      string `json:"email"`
+		StageID    int    `json:"stage_id"`
+		IsDisabled bool   `json:"is_disabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	req.Password = strings.TrimSpace(req.Password)
+	req.FullName = strings.TrimSpace(req.FullName)
+	email, validEmail := normalizeEmail(req.Email)
+
+	if req.Username == "" || req.FullName == "" || !validEmail {
+		http.Error(w, "Full name, username, and email are required", http.StatusBadRequest)
+		return
+	}
+	if req.Password != "" && len(req.Password) < 6 {
+		http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
+		return
+	}
+
+	exists, err := stageExists(req.StageID)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Please select a valid stage", http.StatusBadRequest)
+		return
+	}
+
+	var currentRole string
+	if err := database.DB.QueryRow("SELECT role FROM users WHERE id = ?", studentID).Scan(&currentRole); err == sql.ErrNoRows {
+		http.Error(w, "Student not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if currentRole != "student" {
+		http.Error(w, "Only student accounts can be edited here", http.StatusBadRequest)
+		return
+	}
+
+	var existingUserID int
+	err = database.DB.QueryRow("SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?", req.Username, studentID).Scan(&existingUserID)
+	if err == nil {
+		http.Error(w, "Username already exists", http.StatusConflict)
+		return
+	}
+	if err != sql.ErrNoRows {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	err = database.DB.QueryRow("SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id != ?", email, studentID).Scan(&existingUserID)
+	if err == nil {
+		http.Error(w, "Email already exists", http.StatusConflict)
+		return
+	}
+	if err != sql.ErrNoRows {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if req.Password == "" {
+		_, err = database.DB.Exec(`
+			UPDATE users
+			SET username = ?, full_name = ?, email = ?, stage_id = ?, is_disabled = ?
+			WHERE id = ? AND role = 'student'
+		`, req.Username, req.FullName, email, req.StageID, req.IsDisabled, studentID)
+	} else {
+		hashedPassword, hashErr := hashPassword(req.Password)
+		if hashErr != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+		_, err = database.DB.Exec(`
+			UPDATE users
+			SET username = ?, full_name = ?, email = ?, stage_id = ?, is_disabled = ?, password = ?
+			WHERE id = ? AND role = 'student'
+		`, req.Username, req.FullName, email, req.StageID, req.IsDisabled, hashedPassword, studentID)
+	}
+	if err != nil {
+		http.Error(w, "Failed to update student", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Student updated successfully"})
 }
 
 func SetStudentDisabledHandler(w http.ResponseWriter, r *http.Request) {
@@ -792,9 +944,15 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var fullName, username, completedAt string
 		var score, maxScore int
-		rows.Scan(&fullName, &username, &score, &maxScore, &completedAt)
+		if err := rows.Scan(&fullName, &username, &score, &maxScore, &completedAt); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
 
-		percentage := float64(score) / float64(maxScore) * 100
+		percentage := 0.0
+		if maxScore > 0 {
+			percentage = float64(score) / float64(maxScore) * 100
+		}
 
 		results = append(results, map[string]interface{}{
 			"full_name":    fullName,
@@ -804,6 +962,10 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 			"percentage":   percentage,
 			"completed_at": completedAt,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
