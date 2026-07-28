@@ -614,6 +614,11 @@ body {
     gap: 0.5rem;
 }
 
+.attempt-review-group {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
 .attempt-pill {
     background: #eef2ff;
     border: 1px solid #c7d2fe;
@@ -622,6 +627,21 @@ body {
     display: inline-block;
     font-size: 0.85rem;
     padding: 0.35rem 0.65rem;
+    text-decoration: none;
+}
+
+.attempt-pill:hover {
+    background: #dbe4ff;
+}
+
+.attempt-pill-primary {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #075985;
+}
+
+.attempt-pill-primary:hover {
+    background: #bae6fd;
 }
 
 .progress-up {

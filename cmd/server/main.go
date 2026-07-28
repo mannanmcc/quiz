@@ -40,6 +40,7 @@ func main() {
 	studentRouter.HandleFunc("/dashboard", handlers.StudentDashboardHandler).Methods("GET")
 	studentRouter.HandleFunc("/quiz/{quiz_id}", handlers.QuizPageHandler).Methods("GET")
 	studentRouter.HandleFunc("/attempt/{attempt_id}/report.pdf", handlers.StudentAttemptReportPDFHandler).Methods("GET")
+	studentRouter.HandleFunc("/attempt/{attempt_id}/mistakes.pdf", handlers.StudentAttemptMistakesPDFHandler).Methods("GET")
 	studentRouter.HandleFunc("/api/quiz/{quiz_id}", handlers.GetQuizHandler).Methods("GET")
 	studentRouter.HandleFunc("/api/quiz/{quiz_id}/submit", handlers.SubmitQuizHandler).Methods("POST")
 
@@ -50,6 +51,8 @@ func main() {
 	adminRouter.HandleFunc("/dashboard", handlers.AdminDashboardHandler).Methods("GET")
 	adminRouter.HandleFunc("/student/create", handlers.CreateStudentPageHandler).Methods("GET")
 	adminRouter.HandleFunc("/student/{student_id}/edit", handlers.EditStudentPageHandler).Methods("GET")
+	adminRouter.HandleFunc("/attempt/{attempt_id}/report.pdf", handlers.AdminAttemptReportPDFHandler).Methods("GET")
+	adminRouter.HandleFunc("/attempt/{attempt_id}/mistakes.pdf", handlers.AdminAttemptMistakesPDFHandler).Methods("GET")
 	adminRouter.HandleFunc("/api/student/{student_id}/{action:disable|enable}", handlers.SetStudentDisabledHandler).Methods("POST")
 	adminRouter.HandleFunc("/api/student/{student_id}", handlers.UpdateStudentHandler).Methods("PUT")
 	adminRouter.HandleFunc("/api/student/{student_id}", handlers.DeleteStudentHandler).Methods("DELETE")

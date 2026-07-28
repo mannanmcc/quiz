@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -334,6 +335,28 @@ func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Student updated successfully"})
+}
+
+func AdminAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	attemptID, err := strconv.Atoi(vars["attempt_id"])
+	if err != nil {
+		http.Error(w, "Invalid report", http.StatusBadRequest)
+		return
+	}
+
+	writeAttemptReportPDF(w, attemptID, nil)
+}
+
+func AdminAttemptMistakesPDFHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	attemptID, err := strconv.Atoi(vars["attempt_id"])
+	if err != nil {
+		http.Error(w, "Invalid report", http.StatusBadRequest)
+		return
+	}
+
+	writeMistakesReportPDF(w, attemptID, nil)
 }
 
 func SetStudentDisabledHandler(w http.ResponseWriter, r *http.Request) {
@@ -927,7 +950,7 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 	quizID := vars["quiz_id"]
 
 	rows, err := database.DB.Query(`
-        SELECT u.full_name, u.username, qa.score, qa.max_score, qa.completed_at
+        SELECT u.full_name, u.username, qa.id, qa.score, qa.max_score, qa.completed_at
         FROM quiz_attempts qa
         JOIN users u ON qa.user_id = u.id
         WHERE qa.quiz_id = ?
@@ -943,8 +966,8 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 	results := []map[string]interface{}{}
 	for rows.Next() {
 		var fullName, username, completedAt string
-		var score, maxScore int
-		if err := rows.Scan(&fullName, &username, &score, &maxScore, &completedAt); err != nil {
+		var attemptID, score, maxScore int
+		if err := rows.Scan(&fullName, &username, &attemptID, &score, &maxScore, &completedAt); err != nil {
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
 		}
@@ -955,12 +978,15 @@ func GetStudentResultsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		results = append(results, map[string]interface{}{
-			"full_name":    fullName,
-			"username":     username,
-			"score":        score,
-			"max_score":    maxScore,
-			"percentage":   percentage,
-			"completed_at": completedAt,
+			"full_name":        fullName,
+			"username":         username,
+			"attempt_id":       attemptID,
+			"score":            score,
+			"max_score":        maxScore,
+			"percentage":       percentage,
+			"completed_at":     completedAt,
+			"report_pdf_url":   fmt.Sprintf("/admin/attempt/%d/report.pdf", attemptID),
+			"mistakes_pdf_url": fmt.Sprintf("/admin/attempt/%d/mistakes.pdf", attemptID),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -995,6 +1021,8 @@ func GetQuizProgressReportHandler(w http.ResponseWriter, r *http.Request) {
 		MaxScore    int     `json:"max_score"`
 		Percentage  float64 `json:"percentage"`
 		CompletedAt string  `json:"completed_at"`
+		ReportURL   string  `json:"report_pdf_url"`
+		MistakesURL string  `json:"mistakes_pdf_url"`
 	}
 
 	type studentReport struct {
@@ -1033,6 +1061,8 @@ func GetQuizProgressReportHandler(w http.ResponseWriter, r *http.Request) {
 			MaxScore:    maxScore,
 			Percentage:  percentage,
 			CompletedAt: completedAt,
+			ReportURL:   fmt.Sprintf("/admin/attempt/%d/report.pdf", attemptID),
+			MistakesURL: fmt.Sprintf("/admin/attempt/%d/mistakes.pdf", attemptID),
 		}
 
 		index, exists := reportIndexByUserID[userID]

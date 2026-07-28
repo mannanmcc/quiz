@@ -448,14 +448,15 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"attempt_id":      attemptID,
-		"report_pdf_url":  fmt.Sprintf("/student/attempt/%d/report.pdf", attemptID),
-		"score":           score,
-		"max_score":       maxScore,
-		"percentage":      percentage,
-		"message":         "Quiz submitted successfully",
-		"report":          report,
-		"handler_version": "v2",
+		"attempt_id":       attemptID,
+		"report_pdf_url":   fmt.Sprintf("/student/attempt/%d/report.pdf", attemptID),
+		"mistakes_pdf_url": fmt.Sprintf("/student/attempt/%d/mistakes.pdf", attemptID),
+		"score":            score,
+		"max_score":        maxScore,
+		"percentage":       percentage,
+		"message":          "Quiz submitted successfully",
+		"report":           report,
+		"handler_version":  "v2",
 	}
 
 	log.Printf("SubmitQuizHandler returning report size=%d quiz_id=%d user_id=%d", len(report), quizID, userID)
@@ -475,15 +476,48 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
 
+	writeAttemptReportPDF(w, attemptID, &userID)
+}
+
+func StudentAttemptMistakesPDFHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	attemptID, err := strconv.Atoi(vars["attempt_id"])
+	if err != nil {
+		http.Error(w, "Invalid report", http.StatusBadRequest)
+		return
+	}
+
+	session, _ := middleware.Store.Get(r, "session")
+	userID := session.Values["user_id"].(int)
+
+	writeMistakesReportPDF(w, attemptID, &userID)
+}
+
+func writeAttemptReportPDF(w http.ResponseWriter, attemptID int, userID *int) {
+	writeQuizReportPDF(w, attemptID, userID, false)
+}
+
+func writeMistakesReportPDF(w http.ResponseWriter, attemptID int, userID *int) {
+	writeQuizReportPDF(w, attemptID, userID, true)
+}
+
+func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mistakesOnly bool) {
 	var studentName, username, quizTitle, quizDescription, completedAt string
 	var score, maxScore int
-	err = database.DB.QueryRow(`
+	summaryQuery := `
         SELECT u.full_name, u.username, q.title, COALESCE(q.description, ''), qa.score, qa.max_score, qa.completed_at
         FROM quiz_attempts qa
         JOIN users u ON qa.user_id = u.id
         JOIN quizzes q ON qa.quiz_id = q.id
-        WHERE qa.id = ? AND qa.user_id = ?
-    `, attemptID, userID).Scan(&studentName, &username, &quizTitle, &quizDescription, &score, &maxScore, &completedAt)
+        WHERE qa.id = ?
+    `
+	summaryArgs := []interface{}{attemptID}
+	if userID != nil {
+		summaryQuery += " AND qa.user_id = ?"
+		summaryArgs = append(summaryArgs, *userID)
+	}
+
+	err := database.DB.QueryRow(summaryQuery, summaryArgs...).Scan(&studentName, &username, &quizTitle, &quizDescription, &score, &maxScore, &completedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Report not found", http.StatusNotFound)
@@ -493,22 +527,36 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := database.DB.Query(`
+	answersQuery := `
         SELECT q.question_text, COALESCE(a.selected_answer, ''), q.correct_answer, COALESCE(a.is_correct, 0), q.points
         FROM quiz_attempts qa
         JOIN questions q ON q.quiz_id = qa.quiz_id
         LEFT JOIN answers a ON a.attempt_id = qa.id AND a.question_id = q.id
-        WHERE qa.id = ? AND qa.user_id = ?
-        ORDER BY q.id
-    `, attemptID, userID)
+        WHERE qa.id = ?
+    `
+	answerArgs := []interface{}{attemptID}
+	if userID != nil {
+		answersQuery += " AND qa.user_id = ?"
+		answerArgs = append(answerArgs, *userID)
+	}
+	answersQuery += " ORDER BY q.id"
+
+	rows, err := database.DB.Query(answersQuery, answerArgs...)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
+	title := "Quiz Test Report"
+	reviewTitle := "Answer Review"
+	if mistakesOnly {
+		title = "Mistakes Review Report"
+		reviewTitle = "Mistakes To Review"
+	}
+
 	lines := []pdfLine{
-		newPDFLine("Quiz Test Report", pdfBlue),
+		newPDFLine(title, pdfBlue),
 		newPDFLine("", pdfBlack),
 		newPDFLine("Student: "+studentName+" ("+username+")", pdfBlack),
 		newPDFLine("Quiz: "+quizTitle, pdfBlack),
@@ -518,9 +566,10 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(quizDescription) != "" {
 		lines = append(lines, newPDFLine("Description: "+quizDescription, pdfBlack))
 	}
-	lines = append(lines, newPDFLine("", pdfBlack), newPDFLine("Answer Review", pdfBlue))
+	lines = append(lines, newPDFLine("", pdfBlack), newPDFLine(reviewTitle, pdfBlue))
 
 	questionNumber := 1
+	includedQuestions := 0
 	for rows.Next() {
 		var questionText, selectedAnswer, correctAnswer string
 		var isCorrect bool
@@ -528,6 +577,11 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&questionText, &selectedAnswer, &correctAnswer, &isCorrect, &points); err != nil {
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
+		}
+
+		if mistakesOnly && isCorrect {
+			questionNumber++
+			continue
 		}
 
 		if selectedAnswer == "" {
@@ -552,6 +606,18 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 			newPDFLine("Result: "+status, statusColor),
 		)
 		questionNumber++
+		includedQuestions++
+	}
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	if mistakesOnly && includedQuestions == 0 {
+		lines = append(lines,
+			newPDFLine("", pdfBlack),
+			newPDFLine("Great work. No mistakes were found in this attempt.", pdfGreen),
+		)
 	}
 
 	pdf, err := buildTextPDF(lines)
@@ -561,6 +627,9 @@ func StudentAttemptReportPDFHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := fmt.Sprintf("quiz-report-%d.pdf", attemptID)
+	if mistakesOnly {
+		filename = fmt.Sprintf("quiz-mistakes-%d.pdf", attemptID)
+	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)
 	w.Write(pdf)

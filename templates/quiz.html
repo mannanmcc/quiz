@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Take Quiz</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
 </head>
 <body>
     <nav class="navbar">
@@ -38,6 +38,7 @@
                 <h2>Your Score: <span id="finalScore"></span></h2>
                 <p id="finalPercentage"></p>
                 <a id="downloadReportLink" href="#" class="btn btn-secondary" target="_blank" style="display: none;">Download PDF Report</a>
+                <a id="downloadMistakesReportLink" href="#" class="btn btn-primary" target="_blank" style="display: none;">Download Mistakes Report</a>
             </div>
             <section id="reportSection">
                 <h2>Review Your Answers</h2>
@@ -262,6 +263,11 @@
                     const reportLink = document.getElementById('downloadReportLink');
                     reportLink.href = result.report_pdf_url;
                     reportLink.style.display = 'inline-block';
+                }
+                if (result.mistakes_pdf_url) {
+                    const mistakesLink = document.getElementById('downloadMistakesReportLink');
+                    mistakesLink.href = result.mistakes_pdf_url;
+                    mistakesLink.style.display = 'inline-block';
                 }
                 renderFeedbackReport(result.report);
             } catch (error) {

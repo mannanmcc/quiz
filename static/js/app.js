@@ -486,6 +486,8 @@ async function loadResults(quizId) {
                         <th>Score</th>
                         <th>Percentage</th>
                         <th>Completed At</th>
+                        <th>Report</th>
+                        <th>Mistakes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -493,6 +495,8 @@ async function loadResults(quizId) {
         
         results.forEach(result => {
             const percentage = Number(result.percentage || 0);
+            const reportURL = result.report_pdf_url || `/admin/attempt/${result.attempt_id}/report.pdf`;
+            const mistakesURL = result.mistakes_pdf_url || `/admin/attempt/${result.attempt_id}/mistakes.pdf`;
             tableHTML += `
                 <tr>
                     <td>${escapeHTML(result.full_name)}</td>
@@ -500,6 +504,8 @@ async function loadResults(quizId) {
                     <td>${result.score}/${result.max_score}</td>
                     <td>${percentage.toFixed(1)}%</td>
                     <td>${escapeHTML(new Date(result.completed_at).toLocaleString())}</td>
+                    <td><a class="btn btn-secondary btn-small" href="${escapeAttribute(reportURL)}" target="_blank" rel="noopener">PDF</a></td>
+                    <td><a class="btn btn-primary btn-small" href="${escapeAttribute(mistakesURL)}" target="_blank" rel="noopener">Mistakes</a></td>
                 </tr>
             `;
         });
@@ -563,7 +569,9 @@ async function loadProgressReport(quizId) {
             const changeClass = report.improvement >= 0 ? 'progress-up' : 'progress-down';
             const changePrefix = report.improvement > 0 ? '+' : '';
             const history = report.attempts.map((attempt, index) => {
-                return `<span class="attempt-pill">#${index + 1}: ${attempt.score}/${attempt.max_score} (${attempt.percentage.toFixed(1)}%)</span>`;
+                const reportURL = attempt.report_pdf_url || `/admin/attempt/${attempt.attempt_id}/report.pdf`;
+                const mistakesURL = attempt.mistakes_pdf_url || `/admin/attempt/${attempt.attempt_id}/mistakes.pdf`;
+                return `<span class="attempt-review-group"><a class="attempt-pill" href="${escapeAttribute(reportURL)}" target="_blank" rel="noopener">#${index + 1}: ${attempt.score}/${attempt.max_score} (${attempt.percentage.toFixed(1)}%)</a><a class="attempt-pill attempt-pill-primary" href="${escapeAttribute(mistakesURL)}" target="_blank" rel="noopener">Mistakes</a></span>`;
             }).join('');
 
             tableHTML += `

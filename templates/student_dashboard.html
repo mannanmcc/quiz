@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
 </head>
 <body>
     <nav class="navbar">
@@ -58,7 +58,12 @@
                     <td>{{.score}}/{{.max_score}}</td>
                     <td>{{printf "%.1f" .percentage}}%</td>
                     <td>{{.completed_at}}</td>
-                    <td><a href="/student/attempt/{{.attempt_id}}/report.pdf" class="btn btn-secondary btn-small" target="_blank">PDF</a></td>
+                    <td>
+                        <div class="table-actions">
+                            <a href="/student/attempt/{{.attempt_id}}/report.pdf" class="btn btn-secondary btn-small" target="_blank">PDF</a>
+                            <a href="/student/attempt/{{.attempt_id}}/mistakes.pdf" class="btn btn-primary btn-small" target="_blank">Mistakes</a>
+                        </div>
+                    </td>
                 </tr>
                 {{end}}
             </tbody>
