@@ -73,7 +73,10 @@ func createTables() {
     CREATE TABLE IF NOT EXISTS questions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         quiz_id INTEGER NOT NULL,
+        question_context TEXT,
         question_text TEXT NOT NULL,
+        question_diagram TEXT,
+        answer_explanation TEXT,
         question_type TEXT NOT NULL,
         correct_answer TEXT NOT NULL,
         option1 TEXT,
@@ -106,6 +109,15 @@ func createTables() {
         FOREIGN KEY (question_id) REFERENCES questions(id)
     );
 
+    CREATE TABLE IF NOT EXISTS personalized_quiz_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        quiz_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS deleted_seed_quizzes (
         title TEXT PRIMARY KEY,
         deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -122,6 +134,9 @@ func createTables() {
 	addColumnIfMissing("quizzes", "is_archived", "BOOLEAN DEFAULT 0")
 	addColumnIfMissing("quizzes", "stage_id", "INTEGER")
 	addColumnIfMissing("quizzes", "time_limit_minutes", "INTEGER DEFAULT 0")
+	addColumnIfMissing("questions", "question_context", "TEXT")
+	addColumnIfMissing("questions", "question_diagram", "TEXT")
+	addColumnIfMissing("questions", "answer_explanation", "TEXT")
 	addColumnIfMissing("users", "stage_id", "INTEGER")
 	addColumnIfMissing("users", "email", "TEXT")
 	addColumnIfMissing("users", "is_disabled", "BOOLEAN DEFAULT 0")

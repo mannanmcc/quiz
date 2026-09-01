@@ -16,12 +16,15 @@ import (
 )
 
 type quizQuestionRequest struct {
-	ID            int      `json:"id"`
-	QuestionText  string   `json:"question_text"`
-	QuestionType  string   `json:"question_type"`
-	CorrectAnswer string   `json:"correct_answer"`
-	Options       []string `json:"options"`
-	Points        int      `json:"points"`
+	ID                int      `json:"id"`
+	QuestionContext   string   `json:"question_context"`
+	QuestionText      string   `json:"question_text"`
+	QuestionDiagram   string   `json:"question_diagram"`
+	AnswerExplanation string   `json:"answer_explanation"`
+	QuestionType      string   `json:"question_type"`
+	CorrectAnswer     string   `json:"correct_answer"`
+	Options           []string `json:"options"`
+	Points            int      `json:"points"`
 }
 
 type saveQuizRequest struct {
@@ -31,6 +34,14 @@ type saveQuizRequest struct {
 	TimeLimitMinutes int                   `json:"time_limit_minutes"`
 	LockAfterAttempt *bool                 `json:"lock_after_attempt"`
 	Questions        []quizQuestionRequest `json:"questions"`
+}
+
+type personalizedPracticeRequest struct {
+	StudentID        int    `json:"student_id"`
+	QuizIDs          []int  `json:"quiz_ids"`
+	Title            string `json:"title"`
+	Description      string `json:"description"`
+	TimeLimitMinutes int    `json:"time_limit_minutes"`
 }
 
 func (req saveQuizRequest) shouldLockAfterAttempt() bool {
@@ -183,6 +194,258 @@ func CreateStudentPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tmpl.Execute(w, map[string]interface{}{
 		"Stages": stages,
+	})
+}
+
+func CreatePersonalizedPracticePageHandler(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/create_personalized_paper.html"))
+
+	studentsRows, err := database.DB.Query(`
+		SELECT id, full_name, username
+		FROM users
+		WHERE role = 'student'
+		ORDER BY full_name, username
+	`)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer studentsRows.Close()
+
+	students := []map[string]interface{}{}
+	for studentsRows.Next() {
+		var id int
+		var fullName, username string
+		if err := studentsRows.Scan(&id, &fullName, &username); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+		students = append(students, map[string]interface{}{
+			"id":        id,
+			"full_name": fullName,
+			"username":  username,
+		})
+	}
+
+	quizRows, err := database.DB.Query(`
+		SELECT id, title, description
+		FROM quizzes
+		WHERE is_archived = 0
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer quizRows.Close()
+
+	quizzes := []map[string]interface{}{}
+	for quizRows.Next() {
+		var id int
+		var title, description string
+		if err := quizRows.Scan(&id, &title, &description); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+		quizzes = append(quizzes, map[string]interface{}{
+			"id":          id,
+			"title":       title,
+			"description": description,
+		})
+	}
+
+	tmpl.Execute(w, map[string]interface{}{
+		"Students": students,
+		"Quizzes":  quizzes,
+	})
+}
+
+func CreatePersonalizedPracticePaperHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req personalizedPracticeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.StudentID <= 0 || len(req.QuizIDs) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Please select a student and at least one quiz"})
+		return
+	}
+
+	var studentName, studentUsername, stageName string
+	var studentStageID int
+	err := database.DB.QueryRow(`
+		SELECT u.full_name, u.username, COALESCE(s.name, 'General'), COALESCE(u.stage_id, 0)
+		FROM users u
+		LEFT JOIN stages s ON s.id = u.stage_id
+		WHERE u.id = ? AND u.role = 'student'
+	`, req.StudentID).Scan(&studentName, &studentUsername, &stageName, &studentStageID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Student not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	quizPlaceholders := make([]string, len(req.QuizIDs))
+	quizArgs := make([]interface{}, len(req.QuizIDs))
+	for i, quizID := range req.QuizIDs {
+		quizPlaceholders[i] = "?"
+		quizArgs[i] = quizID
+	}
+	quizFilter := strings.Join(quizPlaceholders, ", ")
+
+	query := fmt.Sprintf(`
+		SELECT DISTINCT q.id, COALESCE(q.question_context, ''), q.question_text, COALESCE(q.question_diagram, ''), COALESCE(q.answer_explanation, ''), q.question_type, q.correct_answer, q.option1, q.option2, q.option3, q.option4, q.points
+		FROM (
+			SELECT qa.quiz_id, MAX(qa.id) AS last_attempt_id
+			FROM quiz_attempts qa
+			WHERE qa.user_id = ? AND qa.quiz_id IN (%s)
+			GROUP BY qa.quiz_id
+		) latest_attempts
+		JOIN answers a ON a.attempt_id = latest_attempts.last_attempt_id
+		JOIN questions q ON q.id = a.question_id
+		WHERE a.is_correct = 0
+		ORDER BY q.id
+	`, quizFilter)
+	args := append([]interface{}{req.StudentID}, quizArgs...)
+
+	rows, err := database.DB.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	questions := []models.Question{}
+	for rows.Next() {
+		var q models.Question
+		var opt1, opt2, opt3, opt4 sql.NullString
+		if err := rows.Scan(&q.ID, &q.QuestionContext, &q.QuestionText, &q.QuestionDiagram, &q.AnswerExplanation, &q.QuestionType, &q.CorrectAnswer, &opt1, &opt2, &opt3, &opt4, &q.Points); err != nil {
+			http.Error(w, "Server error", http.StatusInternalServerError)
+			return
+		}
+		q.Options = []string{}
+		if opt1.Valid {
+			q.Options = append(q.Options, opt1.String)
+		}
+		if opt2.Valid {
+			q.Options = append(q.Options, opt2.String)
+		}
+		if opt3.Valid {
+			q.Options = append(q.Options, opt3.String)
+		}
+		if opt4.Valid {
+			q.Options = append(q.Options, opt4.String)
+		}
+		questions = append(questions, q)
+	}
+	if len(questions) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "No incorrect questions were found for the selected quizzes and student."})
+		return
+	}
+
+	session, _ := middleware.Store.Get(r, "session")
+	adminID := session.Values["user_id"].(int)
+	if req.TimeLimitMinutes < 0 {
+		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
+		return
+	}
+
+	quizTitle := strings.TrimSpace(req.Title)
+	if quizTitle == "" {
+		quizTitle = fmt.Sprintf("Personal Practice - %s", studentName)
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
+		"INSERT INTO quizzes (title, description, created_by, stage_id, time_limit_minutes, lock_after_attempt, is_archived) VALUES (?, ?, ?, ?, ?, ?, 0)",
+		quizTitle,
+		strings.TrimSpace(req.Description),
+		adminID,
+		studentStageID,
+		req.TimeLimitMinutes,
+		false,
+	)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create practice paper"})
+		return
+	}
+	newQuizID, err := result.LastInsertId()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create practice paper"})
+		return
+	}
+
+	for _, q := range questions {
+		var opt1, opt2, opt3, opt4 sql.NullString
+		if len(q.Options) > 0 {
+			opt1 = sql.NullString{String: q.Options[0], Valid: true}
+		}
+		if len(q.Options) > 1 {
+			opt2 = sql.NullString{String: q.Options[1], Valid: true}
+		}
+		if len(q.Options) > 2 {
+			opt3 = sql.NullString{String: q.Options[2], Valid: true}
+		}
+		if len(q.Options) > 3 {
+			opt4 = sql.NullString{String: q.Options[3], Valid: true}
+		}
+
+		if _, err := tx.Exec(`
+			INSERT INTO questions (quiz_id, question_context, question_text, question_diagram, answer_explanation, question_type, correct_answer, option1, option2, option3, option4, points)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, newQuizID, q.QuestionContext, q.QuestionText, q.QuestionDiagram, q.AnswerExplanation, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save practice paper questions"})
+			return
+		}
+	}
+
+	if _, err := tx.Exec("INSERT INTO personalized_quiz_assignments (user_id, quiz_id) VALUES (?, ?)", req.StudentID, newQuizID); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to assign practice paper"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save practice paper"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":          "Personalized practice paper created",
+		"quiz_id":          newQuizID,
+		"student_name":     studentName,
+		"student_username": studentUsername,
+		"quiz_title":       quizTitle,
+		"stage_name":       stageName,
 	})
 }
 
@@ -574,9 +837,9 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		_, err = tx.Exec(`
-            INSERT INTO questions (quiz_id, question_text, question_type, correct_answer, option1, option2, option3, option4, points)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			quizID, q.QuestionText, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points,
+            INSERT INTO questions (quiz_id, question_context, question_text, question_diagram, answer_explanation, question_type, correct_answer, option1, option2, option3, option4, points)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			quizID, q.QuestionContext, q.QuestionText, q.QuestionDiagram, q.AnswerExplanation, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points,
 		)
 		if err != nil {
 			http.Error(w, "Failed to create questions", http.StatusInternalServerError)
@@ -612,7 +875,7 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := database.DB.Query(`
-        SELECT id, question_text, question_type, correct_answer, option1, option2, option3, option4, points
+        SELECT id, COALESCE(question_context, ''), question_text, COALESCE(question_diagram, ''), COALESCE(answer_explanation, ''), question_type, correct_answer, option1, option2, option3, option4, points
         FROM questions
         WHERE quiz_id = ?
         ORDER BY id
@@ -628,7 +891,7 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 		var q models.Question
 		var opt1, opt2, opt3, opt4 sql.NullString
 
-		if err := rows.Scan(&q.ID, &q.QuestionText, &q.QuestionType, &q.CorrectAnswer, &opt1, &opt2, &opt3, &opt4, &q.Points); err != nil {
+		if err := rows.Scan(&q.ID, &q.QuestionContext, &q.QuestionText, &q.QuestionDiagram, &q.AnswerExplanation, &q.QuestionType, &q.CorrectAnswer, &opt1, &opt2, &opt3, &opt4, &q.Points); err != nil {
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
 		}
@@ -750,9 +1013,9 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		if q.ID > 0 {
 			result, err := tx.Exec(`
                 UPDATE questions
-                SET question_text = ?, question_type = ?, correct_answer = ?, option1 = ?, option2 = ?, option3 = ?, option4 = ?, points = ?
+                SET question_context = ?, question_text = ?, question_diagram = ?, answer_explanation = ?, question_type = ?, correct_answer = ?, option1 = ?, option2 = ?, option3 = ?, option4 = ?, points = ?
                 WHERE id = ? AND quiz_id = ?`,
-				q.QuestionText, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points, q.ID, quizID,
+				q.QuestionContext, q.QuestionText, q.QuestionDiagram, q.AnswerExplanation, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points, q.ID, quizID,
 			)
 			if err != nil {
 				http.Error(w, "Failed to update questions", http.StatusInternalServerError)
@@ -770,9 +1033,9 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := tx.Exec(`
-            INSERT INTO questions (quiz_id, question_text, question_type, correct_answer, option1, option2, option3, option4, points)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			quizID, q.QuestionText, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points,
+            INSERT INTO questions (quiz_id, question_context, question_text, question_diagram, answer_explanation, question_type, correct_answer, option1, option2, option3, option4, points)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			quizID, q.QuestionContext, q.QuestionText, q.QuestionDiagram, q.AnswerExplanation, q.QuestionType, q.CorrectAnswer, opt1, opt2, opt3, opt4, q.Points,
 		)
 		if err != nil {
 			http.Error(w, "Failed to add questions", http.StatusInternalServerError)

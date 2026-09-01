@@ -21,10 +21,19 @@ func userCanAccessQuiz(userID int, quizID interface{}) (bool, error) {
 	var count int
 	err := database.DB.QueryRow(`
         SELECT COUNT(*)
-        FROM quizzes q
-        JOIN users u ON u.stage_id = q.stage_id
-        WHERE u.id = ? AND q.id = ? AND q.is_archived = 0
-    `, userID, quizID).Scan(&count)
+        FROM (
+            SELECT q.id
+            FROM quizzes q
+            JOIN users u ON u.stage_id = q.stage_id
+            WHERE u.id = ? AND q.id = ? AND q.is_archived = 0
+
+            UNION ALL
+
+            SELECT p.quiz_id
+            FROM personalized_quiz_assignments p
+            WHERE p.user_id = ? AND p.quiz_id = ?
+        ) t
+    `, userID, quizID, userID, quizID).Scan(&count)
 	if err != nil {
 		return false, err
 	}
@@ -65,12 +74,14 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	seenQuizIDs := map[int]bool{}
 	var quizzes []map[string]interface{}
 	for rows.Next() {
 		var id, unlockVersion, timeLimitMinutes int
 		var lockAfterAttempt bool
 		var title, description, createdAt string
 		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt, &timeLimitMinutes)
+		seenQuizIDs[id] = true
 
 		var attemptCount int
 		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
@@ -90,7 +101,50 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"unlock_version":     unlockVersion,
 			"time_limit_minutes": timeLimitMinutes,
 			"lock_after_attempt": lockAfterAttempt,
+			"is_personalized":    false,
 		})
+	}
+
+	personalizedRows, err := database.DB.Query(`
+        SELECT q.id, q.title, q.description, q.created_at, q.unlock_version, q.lock_after_attempt, COALESCE(q.time_limit_minutes, 0)
+        FROM personalized_quiz_assignments p
+        JOIN quizzes q ON q.id = p.quiz_id
+        WHERE p.user_id = ?
+        ORDER BY q.created_at DESC
+    `, userID)
+	if err == nil {
+		defer personalizedRows.Close()
+		for personalizedRows.Next() {
+			var id, unlockVersion, timeLimitMinutes int
+			var lockAfterAttempt bool
+			var title, description, createdAt string
+			personalizedRows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt, &timeLimitMinutes)
+			if seenQuizIDs[id] {
+				continue
+			}
+			seenQuizIDs[id] = true
+
+			var attemptCount int
+			database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
+				userID, id).Scan(&attemptCount)
+
+			var currentAttemptCount int
+			database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
+				userID, id, unlockVersion).Scan(&currentAttemptCount)
+
+			quizzes = append(quizzes, map[string]interface{}{
+				"id":                 id,
+				"title":              title,
+				"description":        description,
+				"created_at":         createdAt,
+				"attempts":           attemptCount,
+				"locked":             lockAfterAttempt && currentAttemptCount > 0,
+				"unlock_version":     unlockVersion,
+				"time_limit_minutes": timeLimitMinutes,
+				"lock_after_attempt": lockAfterAttempt,
+				"is_personalized":    true,
+			})
+		}
 	}
 
 	// Get recent attempts
@@ -189,7 +243,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get questions
 	rows, err := database.DB.Query(`
-        SELECT id, question_text, question_type, option1, option2, option3, option4, points
+        SELECT id, COALESCE(question_context, ''), question_text, COALESCE(question_diagram, ''), question_type, option1, option2, option3, option4, points
         FROM questions
         WHERE quiz_id = ?
         ORDER BY id
@@ -205,7 +259,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 		var q models.Question
 		var opt1, opt2, opt3, opt4 sql.NullString
 
-		rows.Scan(&q.ID, &q.QuestionText, &q.QuestionType, &opt1, &opt2, &opt3, &opt4, &q.Points)
+		rows.Scan(&q.ID, &q.QuestionContext, &q.QuestionText, &q.QuestionDiagram, &q.QuestionType, &opt1, &opt2, &opt3, &opt4, &q.Points)
 		q.QuizID = quiz.ID
 
 		q.Options = []string{}
@@ -381,7 +435,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := tx.Query(
-		"SELECT id, question_text, correct_answer, points FROM questions WHERE quiz_id = ? ORDER BY id",
+		"SELECT id, COALESCE(question_context, ''), question_text, COALESCE(question_diagram, ''), COALESCE(answer_explanation, ''), correct_answer, points FROM questions WHERE quiz_id = ? ORDER BY id",
 		quizID,
 	)
 	if err != nil {
@@ -393,10 +447,10 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	report := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var questionID int
-		var questionText, correctAnswer string
+		var questionContext, questionText, questionDiagram, answerExplanation, correctAnswer string
 		var points int
 
-		if err := rows.Scan(&questionID, &questionText, &correctAnswer, &points); err != nil {
+		if err := rows.Scan(&questionID, &questionContext, &questionText, &questionDiagram, &answerExplanation, &correctAnswer, &points); err != nil {
 			continue
 		}
 
@@ -407,12 +461,15 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		report = append(report, map[string]interface{}{
-			"question_id":     questionID,
-			"question_text":   questionText,
-			"selected_answer": selectedAnswer,
-			"correct_answer":  correctAnswer,
-			"is_correct":      isCorrect,
-			"points":          points,
+			"question_id":      questionID,
+			"question_context": questionContext,
+			"question_text":    questionText,
+			"question_diagram": questionDiagram,
+			"answer_explanation": answerExplanation,
+			"selected_answer":  selectedAnswer,
+			"correct_answer":   correctAnswer,
+			"is_correct":       isCorrect,
+			"points":           points,
 		})
 	}
 
@@ -528,7 +585,7 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 	}
 
 	answersQuery := `
-        SELECT q.question_text, COALESCE(a.selected_answer, ''), q.correct_answer, COALESCE(a.is_correct, 0), q.points
+        SELECT COALESCE(q.question_context, ''), q.question_text, COALESCE(q.answer_explanation, ''), COALESCE(a.selected_answer, ''), q.correct_answer, COALESCE(a.is_correct, 0), q.points
         FROM quiz_attempts qa
         JOIN questions q ON q.quiz_id = qa.quiz_id
         LEFT JOIN answers a ON a.attempt_id = qa.id AND a.question_id = q.id
@@ -571,10 +628,10 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 	questionNumber := 1
 	includedQuestions := 0
 	for rows.Next() {
-		var questionText, selectedAnswer, correctAnswer string
+		var questionContext, questionText, answerExplanation, selectedAnswer, correctAnswer string
 		var isCorrect bool
 		var points int
-		if err := rows.Scan(&questionText, &selectedAnswer, &correctAnswer, &isCorrect, &points); err != nil {
+		if err := rows.Scan(&questionContext, &questionText, &answerExplanation, &selectedAnswer, &correctAnswer, &isCorrect, &points); err != nil {
 			http.Error(w, "Server error", http.StatusInternalServerError)
 			return
 		}
@@ -600,11 +657,19 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 		lines = append(lines,
 			newPDFLine("", pdfBlack),
 			newPDFLine(fmt.Sprintf("Question %d (%d point(s))", questionNumber, points), pdfBlue),
+		)
+		if strings.TrimSpace(questionContext) != "" {
+			lines = append(lines, newPDFLine("Context: "+questionContext, pdfBlack))
+		}
+		lines = append(lines,
 			newPDFLine("Question: "+questionText, pdfBlack),
 			newPDFLine("Your answer: "+selectedAnswer, answerColor),
 			newPDFLine("Correct answer: "+correctAnswer, pdfGreen),
 			newPDFLine("Result: "+status, statusColor),
 		)
+		if mistakesOnly && strings.TrimSpace(answerExplanation) != "" {
+			lines = append(lines, newPDFLine("Explanation: "+answerExplanation, pdfBlack))
+		}
 		questionNumber++
 		includedQuestions++
 	}

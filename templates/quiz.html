@@ -93,12 +93,15 @@
                 itemDiv.className = 'report-card';
                 itemDiv.innerHTML = `
                     <h3>Question ${index + 1}</h3>
+                    ${item.question_context ? `<p class="question-context">${escapeHTML(item.question_context)}</p>` : ''}
                     <p class="report-question">${escapeHTML(item.question_text)}</p>
+                    ${item.question_diagram ? `<img class="question-diagram" src="${escapeHTML(item.question_diagram)}" alt="Question diagram">` : ''}
                     <p><strong>Your answer:</strong> ${escapeHTML(item.selected_answer || 'No answer')}</p>
                     <p><strong>Correct answer:</strong> ${escapeHTML(item.correct_answer)}</p>
                     <p class="report-status ${item.is_correct ? 'correct-answer' : 'incorrect-answer'}">
                         ${item.is_correct ? 'Correct' : 'Incorrect'}
                     </p>
+                    ${!item.is_correct && item.answer_explanation ? `<p class="answer-explanation"><strong>Explanation:</strong> ${escapeHTML(item.answer_explanation)}</p>` : ''}
                 `;
                 reportContainer.appendChild(itemDiv);
             });
@@ -121,8 +124,28 @@
 
             header.append(number, points);
 
-            const title = document.createElement('h3');
+            if (q.question_context) {
+                const context = document.createElement('div');
+                context.className = 'question-context';
+                context.textContent = q.question_context;
+                questionDiv.append(header, context);
+            } else {
+                questionDiv.append(header);
+            }
+
+            const title = document.createElement('div');
+            title.className = 'question-text';
             title.textContent = q.question_text;
+
+            if (q.question_diagram) {
+                const diagram = document.createElement('img');
+                diagram.className = 'question-diagram';
+                diagram.src = q.question_diagram;
+                diagram.alt = 'Question diagram';
+                questionDiv.append(title, diagram);
+            } else {
+                questionDiv.append(title);
+            }
 
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'options-container';
@@ -143,7 +166,7 @@
                 optionsContainer.appendChild(label);
             });
 
-            questionDiv.append(header, title, optionsContainer);
+            questionDiv.append(optionsContainer);
             return questionDiv;
         }
 

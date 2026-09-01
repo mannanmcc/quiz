@@ -23,6 +23,9 @@
             {{range .Quizzes}}
             <div class="quiz-card">
                 <h3>{{.title}}</h3>
+                {{if .is_personalized}}
+                <span class="badge badge-info">Personal Practice</span>
+                {{end}}
                 <p>{{.description}}</p>
                 <p class="quiz-date">Created: {{.created_at}}</p>
                 <p class="quiz-date">Time limit: {{if .time_limit_minutes}}{{.time_limit_minutes}} minutes{{else}}No timer{{end}}</p>

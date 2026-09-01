@@ -207,6 +207,57 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const personalizedPracticeForm = document.getElementById('personalizedPracticeForm');
+    if (personalizedPracticeForm) {
+        personalizedPracticeForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const selectedStudent = document.getElementById('studentSelect').value;
+            const checkedQuizInputs = document.querySelectorAll('#quizList input[name="quiz_ids"]:checked');
+            const quizIDs = Array.from(checkedQuizInputs).map((input) => parseInt(input.value, 10)).filter(Boolean);
+            const title = document.getElementById('personalizedTitle').value.trim();
+            const description = document.getElementById('personalizedDescription').value.trim();
+            const timeLimitMinutes = parseInt(document.getElementById('personalizedTimeLimit').value, 10) || 0;
+
+            if (!selectedStudent) {
+                alert('Please choose a student.');
+                return;
+            }
+
+            if (quizIDs.length === 0) {
+                alert('Please select at least one quiz.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/api/personalized-practice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        student_id: parseInt(selectedStudent, 10),
+                        quiz_ids: quizIDs,
+                        title: title,
+                        description: description,
+                        time_limit_minutes: timeLimitMinutes
+                    })
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    alert(`Personalized paper created for ${result.student_name || 'the student'}!`);
+                    window.location.href = '/admin/dashboard?student_action=personalized-paper&student_name=' + encodeURIComponent(result.student_name || 'Student') + '#students';
+                } else {
+                    alert(result.error || 'Could not create the personalized paper.');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Could not create the personalized paper.');
+            }
+        });
+    }
+
     if (window.editQuizID) {
         loadQuizForEdit(window.editQuizID);
     }
@@ -272,12 +323,125 @@ function revealReportPanel(resultsDiv) {
     resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+function initQuestionDiagram(questionNumber, existingDiagram = '') {
+    const canvas = document.getElementById(`question_diagram_canvas_${questionNumber}`);
+    const diagramInput = document.getElementById(`question_diagram_${questionNumber}`);
+    const clearButton = document.getElementById(`clear_diagram_${questionNumber}`);
+    const diagramTools = document.getElementById(`diagram_tools_${questionNumber}`);
+    const showButton = document.getElementById(`show_diagram_${questionNumber}`);
+    if (!canvas || !diagramInput || !clearButton || !diagramTools || !showButton) return;
+
+    const context = canvas.getContext('2d');
+    context.lineWidth = 3;
+    context.lineCap = 'round';
+    context.strokeStyle = '#111827';
+
+    if (existingDiagram) {
+        diagramTools.hidden = false;
+        showButton.hidden = true;
+        const image = new Image();
+        image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        image.src = existingDiagram;
+        diagramInput.value = existingDiagram;
+    }
+
+    let isDrawing = false;
+
+    function getPoint(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left) * (canvas.width / rect.width),
+            y: (event.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function saveDiagram() {
+        diagramInput.value = canvas.toDataURL('image/png');
+    }
+
+    canvas.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        isDrawing = true;
+        canvas.setPointerCapture(event.pointerId);
+        const point = getPoint(event);
+        context.beginPath();
+        context.moveTo(point.x, point.y);
+    });
+
+    canvas.addEventListener('pointermove', (event) => {
+        if (!isDrawing) return;
+        event.preventDefault();
+        const point = getPoint(event);
+        context.lineTo(point.x, point.y);
+        context.stroke();
+        saveDiagram();
+    });
+
+    canvas.addEventListener('pointerup', (event) => {
+        if (!isDrawing) return;
+        event.preventDefault();
+        isDrawing = false;
+        saveDiagram();
+    });
+
+    canvas.addEventListener('pointercancel', () => {
+        isDrawing = false;
+    });
+
+    clearButton.addEventListener('click', () => {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        diagramInput.value = '';
+    });
+
+    showButton.addEventListener('click', () => {
+        diagramTools.hidden = false;
+        showButton.hidden = true;
+    });
+}
+
+function initQuestionContext(questionNumber) {
+    const contextPanel = document.getElementById(`question_context_panel_${questionNumber}`);
+    const contextButton = document.getElementById(`show_context_${questionNumber}`);
+    const closeButton = document.getElementById(`close_context_${questionNumber}`);
+    if (!contextPanel || !contextButton || !closeButton) return;
+
+    contextButton.addEventListener('click', () => {
+        contextPanel.hidden = false;
+        contextButton.hidden = true;
+    });
+
+    closeButton.addEventListener('click', () => {
+        contextPanel.hidden = true;
+        contextButton.hidden = false;
+    });
+}
+
+function initAnswerExplanation(questionNumber) {
+    const explanationPanel = document.getElementById(`answer_explanation_panel_${questionNumber}`);
+    const explanationButton = document.getElementById(`show_explanation_${questionNumber}`);
+    const closeButton = document.getElementById(`close_explanation_${questionNumber}`);
+    if (!explanationPanel || !explanationButton || !closeButton) return;
+
+    explanationButton.addEventListener('click', () => {
+        explanationPanel.hidden = false;
+        explanationButton.hidden = true;
+    });
+
+    closeButton.addEventListener('click', () => {
+        explanationPanel.hidden = true;
+        explanationButton.hidden = false;
+    });
+}
+
 function addQuestion(question = {}) {
     questionCount++;
     const questionsDiv = document.getElementById('questionsContainer');
     const options = question.options || [];
     const correctIndex = question.correct_answer ? options.indexOf(question.correct_answer) + 1 : 0;
     const questionId = question.id || 0;
+    const questionContext = question.question_context || '';
+    const questionDiagram = question.question_diagram || '';
+    const answerExplanation = question.answer_explanation || '';
     
     const questionDiv = document.createElement('div');
     questionDiv.className = 'question-builder';
@@ -289,10 +453,29 @@ function addQuestion(question = {}) {
             <button type="button" class="remove-question" onclick="removeQuestion(${questionCount})">Remove</button>
         </div>
         <input type="hidden" name="question_id_${questionCount}" value="${questionId}">
-        
+
+        <button type="button" class="btn btn-secondary btn-small question-support-button" id="show_context_${questionCount}">${questionContext ? 'Edit Context' : 'Add Context'}</button>
+
+        <div class="form-group question-context-panel" id="question_context_panel_${questionCount}" hidden>
+            <div class="support-panel-header">
+                <label>Context / Details</label>
+                <button type="button" class="btn btn-secondary btn-small" id="close_context_${questionCount}">Close</button>
+            </div>
+            <textarea name="question_context_${questionCount}" rows="6" placeholder="Optional: add a passage, background information, geometry setup, or other details students need before answering">${escapeHTML(questionContext)}</textarea>
+        </div>
+
         <div class="form-group">
             <label>Question Text</label>
-            <input type="text" name="question_text_${questionCount}" value="${escapeAttribute(question.question_text)}" placeholder="e.g., What is the meaning of 'Happy'?" required>
+            <textarea name="question_text_${questionCount}" rows="3" placeholder="Add the actual question students answer" required>${escapeHTML(question.question_text)}</textarea>
+        </div>
+
+        <div class="form-group">
+            <input type="hidden" id="question_diagram_${questionCount}" name="question_diagram_${questionCount}" value="${escapeAttribute(questionDiagram)}">
+            <button type="button" class="btn btn-secondary btn-small" id="show_diagram_${questionCount}" ${questionDiagram ? 'hidden' : ''}>Add Diagram</button>
+            <div class="diagram-tools" id="diagram_tools_${questionCount}" ${questionDiagram ? '' : 'hidden'}>
+                <canvas id="question_diagram_canvas_${questionCount}" class="diagram-canvas" width="720" height="360"></canvas>
+                <button type="button" class="btn btn-secondary btn-small" id="clear_diagram_${questionCount}">Clear Diagram</button>
+            </div>
         </div>
         
         <div class="form-group">
@@ -325,6 +508,16 @@ function addQuestion(question = {}) {
                 <option value="4" ${correctIndex === 4 ? 'selected' : ''}>Option 4</option>
             </select>
         </div>
+
+        <button type="button" class="btn btn-secondary btn-small question-support-button" id="show_explanation_${questionCount}">${answerExplanation ? 'Edit Explanation' : 'Add Explanation'}</button>
+
+        <div class="form-group question-explanation-panel" id="answer_explanation_panel_${questionCount}" hidden>
+            <div class="support-panel-header">
+                <label>Answer Explanation</label>
+                <button type="button" class="btn btn-secondary btn-small" id="close_explanation_${questionCount}">Close</button>
+            </div>
+            <textarea name="answer_explanation_${questionCount}" rows="8" placeholder="Optional: add multi-line calculations, working steps, or reasoning shown only on the mistakes report">${escapeHTML(answerExplanation)}</textarea>
+        </div>
         
         <div class="form-group">
             <label>Points</label>
@@ -333,6 +526,9 @@ function addQuestion(question = {}) {
     `;
     
     questionsDiv.appendChild(questionDiv);
+    initQuestionContext(questionCount);
+    initQuestionDiagram(questionCount, questionDiagram);
+    initAnswerExplanation(questionCount);
 }
 
 function removeQuestion(id) {
@@ -361,7 +557,10 @@ async function submitQuiz(event, quizId = null) {
         if (!questionDiv) continue;
         
         const questionId = parseInt(formData.get(`question_id_${i}`) || '0');
+        const questionContext = formData.get(`question_context_${i}`) || '';
         const questionText = formData.get(`question_text_${i}`);
+        const questionDiagram = formData.get(`question_diagram_${i}`) || '';
+        const answerExplanation = formData.get(`answer_explanation_${i}`) || '';
         const option1 = formData.get(`option1_${i}`);
         const option2 = formData.get(`option2_${i}`);
         const option3 = formData.get(`option3_${i}`);
@@ -374,7 +573,10 @@ async function submitQuiz(event, quizId = null) {
         
         questions.push({
             id: questionId,
+            question_context: questionContext,
             question_text: questionText,
+            question_diagram: questionDiagram,
+            answer_explanation: answerExplanation,
             question_type: 'meaning',
             correct_answer: correctAnswer,
             options: options,

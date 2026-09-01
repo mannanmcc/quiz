@@ -32,13 +32,16 @@ type Stage struct {
 }
 
 type Question struct {
-	ID            int      `json:"id"`
-	QuizID        int      `json:"quiz_id"`
-	QuestionText  string   `json:"question_text"`
-	QuestionType  string   `json:"question_type"` // "meaning", "synonym", "antonym"
-	CorrectAnswer string   `json:"correct_answer"`
-	Options       []string `json:"options"`
-	Points        int      `json:"points"`
+	ID                int      `json:"id"`
+	QuizID            int      `json:"quiz_id"`
+	QuestionContext   string   `json:"question_context"`
+	QuestionText      string   `json:"question_text"`
+	QuestionDiagram   string   `json:"question_diagram"`
+	AnswerExplanation string   `json:"answer_explanation"`
+	QuestionType      string   `json:"question_type"` // "meaning", "synonym", "antonym"
+	CorrectAnswer     string   `json:"correct_answer"`
+	Options           []string `json:"options"`
+	Points            int      `json:"points"`
 }
 
 type QuizAttempt struct {
