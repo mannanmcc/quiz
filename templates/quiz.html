@@ -4,25 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Take Quiz</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 Vocabulary Quiz</div>
+        <div class="nav-brand">🎓 QUIZ</div>
         <div class="nav-user">
             <a href="/student/dashboard" class="btn btn-secondary">Back to Dashboard</a>
         </div>
     </nav>
 
     <div class="container">
-        <div id="quizContainer">
-            <h1 id="quizTitle">Loading...</h1>
-            <p id="quizDescription"></p>
-            
-            <form id="quizForm">
-                <div id="questionsContainer"></div>
-                <button type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
-            </form>
+        <div id="quizContainer" class="quiz-taking-layout">
+            <main class="quiz-main">
+                <h1 id="quizTitle">Loading...</h1>
+                <p id="quizDescription"></p>
+                
+                <form id="quizForm" novalidate>
+                    <div id="questionsContainer"></div>
+                    <button id="submitQuizButton" type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
+                </form>
+            </main>
+
+            <aside id="timerPanel" class="timer-panel" style="display: none;">
+                <span class="timer-label">Time Remaining</span>
+                <strong id="timerDisplay">--:--</strong>
+            </aside>
         </div>
 
         <div id="resultsContainer" style="display: none;">
@@ -30,25 +37,74 @@
             <div class="results-box">
                 <h2>Your Score: <span id="finalScore"></span></h2>
                 <p id="finalPercentage"></p>
-                <a href="/student/dashboard" class="btn btn-primary">Back to Dashboard</a>
+                <a id="downloadReportLink" href="#" class="btn btn-secondary" target="_blank" style="display: none;">Download PDF Report</a>
+                <a id="downloadMistakesReportLink" href="#" class="btn btn-primary" target="_blank" style="display: none;">Download Mistakes Report</a>
             </div>
+            <section id="reportSection">
+                <h2>Review Your Answers</h2>
+                <div id="reportDetails"></div>
+                <div id="reportDebug" class="report-debug"></div>
+            </section>
+            <a href="/student/dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
     </div>
 
     <script>
         const quizId = "{{.QuizID}}";
-
-        function questionTypeLabel(type) {
-            if (type === 'meaning') return 'Meaning';
-            if (type === 'synonym') return 'Synonym';
-            if (type === 'antonym') return 'Antonym';
-            return 'Question';
-        }
+        let timerInterval = null;
+        let remainingSeconds = 0;
+        let quizSubmitted = false;
+        console.log('submit endpoint', `/student/api/quiz/${quizId}/submit`);
 
         function showLoadError(message) {
             document.getElementById('quizTitle').textContent = 'Unable to load quiz';
             document.getElementById('quizDescription').textContent = message;
             document.getElementById('quizForm').style.display = 'none';
+            document.getElementById('timerPanel').style.display = 'none';
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderFeedbackReport(report) {
+            const reportContainer = document.getElementById('reportDetails');
+            const debugContainer = document.getElementById('reportDebug');
+            reportContainer.innerHTML = '';
+            debugContainer.innerHTML = '';
+
+            if (!Array.isArray(report)) {
+                reportContainer.innerHTML = '<p>No answer report available.</p>';
+                return;
+            }
+
+            if (report.length === 0) {
+                reportContainer.innerHTML = '<p>No answer report available.</p>';
+                return;
+            }
+
+            report.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'report-card';
+                itemDiv.innerHTML = `
+                    <h3>Question ${index + 1}</h3>
+                    ${item.question_context ? `<p class="question-context">${escapeHTML(item.question_context)}</p>` : ''}
+                    <p class="report-question">${escapeHTML(item.question_text)}</p>
+                    ${item.question_diagram ? `<img class="question-diagram" src="${escapeHTML(item.question_diagram)}" alt="Question diagram">` : ''}
+                    <p><strong>Your answer:</strong> ${escapeHTML(item.selected_answer || 'No answer')}</p>
+                    <p><strong>Correct answer:</strong> ${escapeHTML(item.correct_answer)}</p>
+                    <p class="report-status ${item.is_correct ? 'correct-answer' : 'incorrect-answer'}">
+                        ${item.is_correct ? 'Correct' : 'Incorrect'}
+                    </p>
+                    ${!item.is_correct && item.answer_explanation ? `<p class="answer-explanation"><strong>Explanation:</strong> ${escapeHTML(item.answer_explanation)}</p>` : ''}
+                `;
+                reportContainer.appendChild(itemDiv);
+            });
         }
 
         function renderQuestion(q, index) {
@@ -62,18 +118,34 @@
             number.className = 'question-number';
             number.textContent = `Question ${index + 1}`;
 
-            const type = document.createElement('span');
-            type.className = 'question-type';
-            type.textContent = questionTypeLabel(q.question_type);
-
             const points = document.createElement('span');
             points.className = 'question-points';
             points.textContent = `${q.points} point(s)`;
 
-            header.append(number, type, points);
+            header.append(number, points);
 
-            const title = document.createElement('h3');
+            if (q.question_context) {
+                const context = document.createElement('div');
+                context.className = 'question-context';
+                context.textContent = q.question_context;
+                questionDiv.append(header, context);
+            } else {
+                questionDiv.append(header);
+            }
+
+            const title = document.createElement('div');
+            title.className = 'question-text';
             title.textContent = q.question_text;
+
+            if (q.question_diagram) {
+                const diagram = document.createElement('img');
+                diagram.className = 'question-diagram';
+                diagram.src = q.question_diagram;
+                diagram.alt = 'Question diagram';
+                questionDiv.append(title, diagram);
+            } else {
+                questionDiv.append(title);
+            }
 
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'options-container';
@@ -86,7 +158,6 @@
                 input.type = 'radio';
                 input.name = `question_${q.id}`;
                 input.value = option;
-                input.required = true;
 
                 const text = document.createElement('span');
                 text.textContent = option;
@@ -95,8 +166,42 @@
                 optionsContainer.appendChild(label);
             });
 
-            questionDiv.append(header, title, optionsContainer);
+            questionDiv.append(optionsContainer);
             return questionDiv;
+        }
+
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function updateTimerDisplay() {
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerPanel = document.getElementById('timerPanel');
+            timerDisplay.textContent = formatTime(Math.max(remainingSeconds, 0));
+            timerPanel.classList.toggle('timer-warning', remainingSeconds <= 60);
+        }
+
+        function startTimer(minutes) {
+            if (!minutes || minutes <= 0) {
+                document.getElementById('timerPanel').style.display = 'none';
+                return;
+            }
+
+            remainingSeconds = minutes * 60;
+            document.getElementById('timerPanel').style.display = 'block';
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                remainingSeconds -= 1;
+                updateTimerDisplay();
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    submitQuiz(true);
+                }
+            }, 1000);
         }
 
         async function loadQuiz() {
@@ -110,6 +215,7 @@
 
                 document.getElementById('quizTitle').textContent = data.quiz.title;
                 document.getElementById('quizDescription').textContent = data.quiz.description || '';
+                startTimer(data.quiz.time_limit_minutes || 0);
 
                 const container = document.getElementById('questionsContainer');
                 container.innerHTML = '';
@@ -128,10 +234,21 @@
             }
         }
 
-        document.getElementById('quizForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        async function submitQuiz(isAutoSubmit = false) {
+            if (quizSubmitted) {
+                return;
+            }
+            quizSubmitted = true;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
 
-            const formData = new FormData(e.target);
+            const form = document.getElementById('quizForm');
+            const submitButton = document.getElementById('submitQuizButton');
+            submitButton.disabled = true;
+            submitButton.textContent = isAutoSubmit ? 'Submitting time-expired exam...' : 'Submitting...';
+
+            const formData = new FormData(form);
             const answers = {};
 
             for (let [key, value] of formData.entries()) {
@@ -153,17 +270,41 @@
                 }
 
                 const result = await response.json();
+                console.log('submit result', result);
+                if (!Array.isArray(result.report)) {
+                    console.warn('Expected result.report to be an array', result.report);
+                }
 
                 document.getElementById('quizContainer').style.display = 'none';
                 document.getElementById('resultsContainer').style.display = 'block';
+                document.getElementById('timerPanel').style.display = 'none';
                 document.getElementById('finalScore').textContent =
                     `${result.score} / ${result.max_score}`;
                 document.getElementById('finalPercentage').textContent =
                     `Percentage: ${result.percentage.toFixed(1)}%`;
+                if (result.report_pdf_url) {
+                    const reportLink = document.getElementById('downloadReportLink');
+                    reportLink.href = result.report_pdf_url;
+                    reportLink.style.display = 'inline-block';
+                }
+                if (result.mistakes_pdf_url) {
+                    const mistakesLink = document.getElementById('downloadMistakesReportLink');
+                    mistakesLink.href = result.mistakes_pdf_url;
+                    mistakesLink.style.display = 'inline-block';
+                }
+                renderFeedbackReport(result.report);
             } catch (error) {
                 console.error('Error submitting quiz:', error);
+                quizSubmitted = false;
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Quiz';
                 alert('Failed to submit quiz. Please try again.');
             }
+        }
+
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitQuiz(false);
         });
 
         loadQuiz();

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Personalized Practice Paper</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260823-personalized-paper">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">🎓 QUIZ - Admin</div>
+        <div class="nav-user">
+            <a href="/admin/dashboard" class="btn btn-secondary">Back to Dashboard</a>
+            <a href="/logout" class="btn btn-secondary">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="form-shell">
+            <h1>Create Personalized Practice Paper</h1>
+            <p class="page-intro">Select a student and one or more quizzes to build a single revision paper from all their incorrect answers.</p>
+
+            <form id="personalizedPracticeForm" class="admin-form">
+                <div class="form-group">
+                    <label for="studentSelect">Student</label>
+                    <select id="studentSelect" required>
+                        <option value="">Choose a student</option>
+                        {{range .Students}}
+                        <option value="{{.id}}">{{.full_name}} ({{.username}})</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Source Quizzes</label>
+                    <div class="checkbox-list" id="quizList">
+                        {{range .Quizzes}}
+                        <label class="checkbox-item">
+                            <input type="checkbox" value="{{.id}}" name="quiz_ids">
+                            <span>
+                                <strong>{{.title}}</strong>
+                                {{if .description}}<small>{{.description}}</small>{{end}}
+                            </span>
+                        </label>
+                        {{else}}
+                        <p class="empty-message">No active quizzes are available yet.</p>
+                        {{end}}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="personalizedTitle">Paper Title</label>
+                    <input type="text" id="personalizedTitle" placeholder="Personal Practice - Student Name">
+                </div>
+
+                <div class="form-group">
+                    <label for="personalizedDescription">Paper Description</label>
+                    <textarea id="personalizedDescription" rows="3" placeholder="Practice paper built from previous mistakes."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="personalizedTimeLimit">Time Limit (minutes)</label>
+                    <input type="number" id="personalizedTimeLimit" min="0" value="0" step="1">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-large">Create Personalized Paper</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=20260823-personalized-paper"></script>
+</body>
+</html>

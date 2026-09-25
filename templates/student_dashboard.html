@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 Vocabulary Quiz</div>
+        <div class="nav-brand">🎓 QUIZ</div>
         <div class="nav-user">
             <span>Welcome, {{.Username}}!</span>
             <a href="/logout" class="btn btn-secondary">Logout</a>
@@ -17,13 +17,18 @@
 
     <div class="container">
         <h1>Available Quizzes</h1>
+        <p class="stage-summary">Stage: <strong>{{.StageName}}</strong></p>
         
         <div class="quiz-grid">
             {{range .Quizzes}}
             <div class="quiz-card">
                 <h3>{{.title}}</h3>
+                {{if .is_personalized}}
+                <span class="badge badge-info">Personal Practice</span>
+                {{end}}
                 <p>{{.description}}</p>
                 <p class="quiz-date">Created: {{.created_at}}</p>
+                <p class="quiz-date">Time limit: {{if .time_limit_minutes}}{{.time_limit_minutes}} minutes{{else}}No timer{{end}}</p>
                 {{if .attempts}}
                 <span class="badge badge-success">{{.attempts}} attempt(s)</span>
                 {{end}}
@@ -33,6 +38,8 @@
                 <a href="/student/quiz/{{.id}}" class="btn btn-primary">{{if .attempts}}Take Again{{else}}Take Quiz{{end}}</a>
                 {{end}}
             </div>
+            {{else}}
+            <p class="empty-message">No quizzes are assigned to your stage yet.</p>
             {{end}}
         </div>
 
@@ -44,6 +51,7 @@
                     <th>Score</th>
                     <th>Percentage</th>
                     <th>Date</th>
+                    <th>Report</th>
                 </tr>
             </thead>
             <tbody>
@@ -53,6 +61,12 @@
                     <td>{{.score}}/{{.max_score}}</td>
                     <td>{{printf "%.1f" .percentage}}%</td>
                     <td>{{.completed_at}}</td>
+                    <td>
+                        <div class="table-actions">
+                            <a href="/student/attempt/{{.attempt_id}}/report.pdf" class="btn btn-secondary btn-small" target="_blank">PDF</a>
+                            <a href="/student/attempt/{{.attempt_id}}/mistakes.pdf" class="btn btn-primary btn-small" target="_blank">Mistakes</a>
+                        </div>
+                    </td>
                 </tr>
                 {{end}}
             </tbody>
