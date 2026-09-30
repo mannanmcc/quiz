@@ -395,6 +395,43 @@ body {
     margin: -0.5rem 0 1.5rem;
 }
 
+.exam-search {
+    margin: 0 0 1.5rem;
+}
+
+.exam-type-form {
+    margin: 1rem 0 1.5rem;
+}
+
+.exam-type-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.exam-search label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.exam-search-controls,
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.exam-search-controls input {
+    flex: 1 1 280px;
+}
+
+.pagination {
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
 /* Exam Management Table */
 .exam-table-wrap {
     background: white;
@@ -809,6 +846,21 @@ body {
 .diagram-tools {
     display: grid;
     gap: 0.75rem;
+    outline: none;
+}
+
+.diagram-tools:focus {
+    border-radius: 8px;
+    box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.3);
+}
+
+.diagram-tools p {
+    margin: 0;
+}
+
+.diagram-paste-status {
+    color: #23633d;
+    min-height: 1.25rem;
 }
 
 .diagram-tools[hidden],
@@ -989,3 +1041,43 @@ h1, h2 {
     color: white;
     margin-bottom: 1rem;
 }
+
+/* Stage-specific boards on the student dashboard. */
+.student-board-sections {
+    display: grid;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+.student-board-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: clamp(1rem, 3vw, 2rem);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+.student-board-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.student-board-heading h2 {
+    color: #24324b;
+    margin-bottom: .35rem;
+}
+.student-board-heading p, .student-set-heading p {
+    color: #526078;
+    margin: 0;
+}
+.student-set-heading {
+    margin: 1.25rem 0;
+}
+.student-set-heading h3, .student-board-section h4 {
+    color: #24324b;
+    margin-bottom: .5rem;
+}
+.student-board-section h4 { font-size: 1.15rem; }
+.student-board-section .quiz-grid { margin-bottom: 0; }
+.student-board-complete { margin-top: 1.25rem; color: #23633d; }

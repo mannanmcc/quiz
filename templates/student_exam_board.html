@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{{.Board}} — Exam sets</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body><nav class="navbar"><div class="nav-brand">🎓 QUIZ</div><div class="nav-user"><a href="/student/dashboard" class="btn btn-secondary">All boards</a><a href="/logout" class="btn btn-secondary">Logout</a></div></nav>
+<main class="container"><h1>{{.Board}}</h1><p>Complete every paper in a set to unlock the next set. You can take the papers in either order.</p>
+{{range .Sets}}<section id="set-{{.ID}}" class="quiz-card" style="margin-bottom:1.5rem"><p>{{.Status}} · {{.Completed}} / {{.Total}} papers completed</p>
+{{if not .Locked}}<div class="quiz-grid">{{range .Papers}}<article class="quiz-card"><h3>{{.Title}}</h3>{{if .Minutes}}<p>{{.Minutes}} minutes</p>{{end}}
+{{if .Completed}}<p class="badge badge-success">Completed</p>{{end}}
+{{if .Locked}}<p>Completed — see your reports on the dashboard.</p>{{else}}<a class="btn btn-primary" href="/student/quiz/{{.ID}}">{{if .Completed}}Take again{{else}}Start paper{{end}}</a>{{end}}
+</article>{{end}}</div>{{end}}</section>{{end}}</main></body></html>

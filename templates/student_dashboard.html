@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260927-board-sections">
 </head>
 <body>
     <nav class="navbar">
@@ -16,30 +16,43 @@
     </nav>
 
     <div class="container">
-        <h1>Available Quizzes</h1>
+        <h1>Exam Types</h1>
         <p class="stage-summary">Stage: <strong>{{.StageName}}</strong></p>
         
-        <div class="quiz-grid">
-            {{range .Quizzes}}
-            <div class="quiz-card">
-                <h3>{{.title}}</h3>
-                {{if .is_personalized}}
-                <span class="badge badge-info">Personal Practice</span>
-                {{end}}
-                <p>{{.description}}</p>
-                <p class="quiz-date">Created: {{.created_at}}</p>
-                <p class="quiz-date">Time limit: {{if .time_limit_minutes}}{{.time_limit_minutes}} minutes{{else}}No timer{{end}}</p>
-                {{if .attempts}}
-                <span class="badge badge-success">{{.attempts}} attempt(s)</span>
-                {{end}}
-                {{if .locked}}
-                <button class="btn btn-secondary" disabled>Locked</button>
+        <p class="stage-summary">Choose a paper under your exam type below. Complete all its papers to unlock the next set.</p>
+        <div class="student-board-sections">
+            {{range .Boards}}
+            <section class="student-board-section" aria-labelledby="board-{{.ID}}-title">
+                <header class="student-board-heading">
+                    <div>
+                        <h2 id="board-{{.ID}}-title">{{.Name}}</h2>
+                        <p>{{.CompletedSets}} of {{.Sets}} sets completed</p>
+                    </div>
+                </header>
+                {{with .CurrentSet}}
+                <div class="student-set-heading">
+                    <p>{{.Status}} · {{.Completed}} / {{.Total}} papers completed</p>
+                </div>
+                <div class="quiz-grid">
+                    {{range .Papers}}
+                    <article class="quiz-card">
+                        <h3>{{.Title}}</h3>
+                        {{if .Minutes}}<p class="quiz-date">{{.Minutes}} minutes</p>{{end}}
+                        {{if .Completed}}<p><span class="badge badge-success">Completed</span></p>{{end}}
+                        {{if .Locked}}
+                        <p>See your results in Recent Attempts.</p>
+                        {{else}}
+                        <a href="/student/quiz/{{.ID}}" class="btn btn-primary">{{if .Completed}}Take again{{else}}Start paper{{end}}</a>
+                        {{end}}
+                    </article>
+                    {{end}}
+                </div>
                 {{else}}
-                <a href="/student/quiz/{{.id}}" class="btn btn-primary">{{if .attempts}}Take Again{{else}}Take Quiz{{end}}</a>
+                <p class="student-board-complete">You have completed all available papers for this exam type.</p>
                 {{end}}
-            </div>
+            </section>
             {{else}}
-            <p class="empty-message">No quizzes are assigned to your stage yet.</p>
+            <p class="empty-message">No published exams with an assigned exam type are available for your stage yet.</p>
             {{end}}
         </div>
 

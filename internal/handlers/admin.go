@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"vocabulary-quiz-app/internal/database"
@@ -28,9 +29,12 @@ type quizQuestionRequest struct {
 }
 
 type saveQuizRequest struct {
+	PaperOrder       int                   `json:"paper_order"`
 	Title            string                `json:"title"`
 	Description      string                `json:"description"`
 	StageID          int                   `json:"stage_id"`
+	ExamType         string                `json:"exam_type"`
+	ExamSetID        int                   `json:"exam_set_id"`
 	TimeLimitMinutes int                   `json:"time_limit_minutes"`
 	LockAfterAttempt *bool                 `json:"lock_after_attempt"`
 	Questions        []quizQuestionRequest `json:"questions"`
@@ -51,17 +55,181 @@ func (req saveQuizRequest) shouldLockAfterAttempt() bool {
 	return *req.LockAfterAttempt
 }
 
+func redirectExamTypeManagement(w http.ResponseWriter, r *http.Request, key, message string) {
+	query := url.Values{}
+	query.Set(key, message)
+	tab := "exam-types"
+	if strings.HasPrefix(r.URL.Path, "/admin/exam-sets") {
+		tab = "exam-sets"
+	}
+	http.Redirect(w, r, "/admin/dashboard?"+query.Encode()+"#"+tab, http.StatusSeeOther)
+}
+
+func CreateExamTypeHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Invalid form submission.")
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Exam type name is required.")
+		return
+	}
+
+	exists, err := examTypeExists(name)
+	if err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not create exam type.")
+		return
+	}
+	if exists {
+		redirectExamTypeManagement(w, r, "exam_type_error", "That exam type already exists.")
+		return
+	}
+	if _, err := database.DB.Exec("INSERT INTO exam_types (name) VALUES (?)", name); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not create exam type.")
+		return
+	}
+	redirectExamTypeManagement(w, r, "exam_type_message", "Exam type created.")
+}
+
+func DeleteExamTypeHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["exam_type_id"])
+	if err != nil || id < 1 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Invalid exam type.")
+		return
+	}
+
+	var name string
+	err = database.DB.QueryRow("SELECT name FROM exam_types WHERE id = ?", id).Scan(&name)
+	if err == sql.ErrNoRows {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Exam type not found.")
+		return
+	}
+	if err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not delete exam type.")
+		return
+	}
+
+	var usageCount int
+	if err := database.DB.QueryRow("SELECT COUNT(*) FROM quizzes WHERE exam_type = ? COLLATE NOCASE", name).Scan(&usageCount); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not check exam type usage.")
+		return
+	}
+	if usageCount > 0 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "This exam type is used by existing papers and cannot be deleted.")
+		return
+	}
+	if _, err := database.DB.Exec("DELETE FROM exam_types WHERE id = ?", id); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not delete exam type.")
+		return
+	}
+	redirectExamTypeManagement(w, r, "exam_type_message", "Exam type deleted.")
+}
+
+func CreateExamSetHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Invalid set form submission.")
+		return
+	}
+	examTypeID, err := strconv.Atoi(r.FormValue("exam_type_id"))
+	name := strings.TrimSpace(r.FormValue("name"))
+	if err != nil || examTypeID < 1 || name == "" {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Choose an exam type and enter a set name.")
+		return
+	}
+	stageID, _ := strconv.Atoi(r.FormValue("stage_id"))
+	sequence, _ := strconv.Atoi(r.FormValue("sequence_number"))
+	validStage, stageErr := stageExists(stageID)
+	var typeCount int
+	typeErr := database.DB.QueryRow("SELECT COUNT(*) FROM exam_types WHERE id=?", examTypeID).Scan(&typeCount)
+	if stageErr != nil || typeErr != nil || !validStage || typeCount != 1 || sequence < 1 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Choose a board, stage and positive sequence.")
+		return
+	}
+	if _, err := database.DB.Exec(`INSERT INTO exam_sets (exam_type_id,stage_id,name,sequence_number)
+ SELECT et.id,s.id,?,? FROM exam_types et JOIN stages s ON s.id=? WHERE et.id=? AND ?>0`, name, sequence, stageID, examTypeID, sequence); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not create the set. It may already exist.")
+		return
+	}
+	redirectExamTypeManagement(w, r, "exam_type_message", "Exam set created.")
+}
+
+func DeleteExamSetHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(mux.Vars(r)["exam_set_id"])
+	if err != nil || id < 1 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Invalid exam set.")
+		return
+	}
+	var usageCount int
+	if err := database.DB.QueryRow("SELECT COUNT(*) FROM quizzes WHERE exam_set_id = ?", id).Scan(&usageCount); err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not check set usage.")
+		return
+	}
+	if usageCount > 0 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "This set is used by existing papers and cannot be deleted.")
+		return
+	}
+	result, err := database.DB.Exec("DELETE FROM exam_sets WHERE id = ?", id)
+	if err != nil {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Could not delete exam set.")
+		return
+	}
+	deleted, _ := result.RowsAffected()
+	if deleted == 0 {
+		redirectExamTypeManagement(w, r, "exam_type_error", "Exam set not found.")
+		return
+	}
+	redirectExamTypeManagement(w, r, "exam_type_message", "Exam set deleted.")
+}
+
 func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/admin_dashboard.html"))
 
-	// Get all quizzes
-	rows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived, COALESCE(s.name, 'General'), COALESCE(q.time_limit_minutes, 0)
+	const quizzesPerPage = 10
+	searchQuery := strings.TrimSpace(r.URL.Query().Get("search"))
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	searchPattern := "%" + searchQuery + "%"
+	searchFilter := `
+        WHERE (? = ''
+            OR q.title LIKE ?
+            OR COALESCE(q.description, '') LIKE ?
+            OR COALESCE(q.exam_type, 'General') LIKE ?
+            OR COALESCE(s.name, '') LIKE ?
+            OR COALESCE(u.full_name, '') LIKE ?)`
+
+	var totalQuizzes int
+	err = database.DB.QueryRow(`
+        SELECT COUNT(*)
         FROM quizzes q
         JOIN users u ON q.created_by = u.id
         LEFT JOIN stages s ON q.stage_id = s.id
-        ORDER BY q.created_at DESC
-    `)
+    `+searchFilter, searchQuery, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern).Scan(&totalQuizzes)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	totalPages := (totalQuizzes + quizzesPerPage - 1) / quizzesPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+
+	// Get the requested page of quizzes. Search includes title, description,
+	// exam type, stage, and the administrator who created the paper.
+	rows, err := database.DB.Query(`
+		SELECT q.id, q.title, q.description, q.created_at, u.full_name, q.lock_after_attempt, q.is_archived, COALESCE(s.name, 'General'), COALESCE(q.exam_type, 'General'), COALESCE(q.time_limit_minutes, 0)
+        FROM quizzes q
+        JOIN users u ON q.created_by = u.id
+        LEFT JOIN stages s ON q.stage_id = s.id
+	`+searchFilter+`
+        ORDER BY q.created_at DESC, q.id DESC
+        LIMIT ? OFFSET ?
+    `, searchQuery, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, quizzesPerPage, (page-1)*quizzesPerPage)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
@@ -75,8 +243,8 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		var timeLimitMinutes int
 		var lockAfterAttempt bool
 		var isArchived bool
-		var title, description, createdAt, createdBy, stageName string
-		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived, &stageName, &timeLimitMinutes)
+		var title, description, createdAt, createdBy, stageName, examType string
+		rows.Scan(&id, &title, &description, &createdAt, &createdBy, &lockAfterAttempt, &isArchived, &stageName, &examType, &timeLimitMinutes)
 		quiz := map[string]interface{}{
 			"id":                 id,
 			"title":              title,
@@ -84,6 +252,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 			"created_at":         createdAt,
 			"created_by":         createdBy,
 			"stage_name":         stageName,
+			"exam_type":          examType,
 			"time_limit_minutes": timeLimitMinutes,
 			"lock_after_attempt": lockAfterAttempt,
 			"is_archived":        isArchived,
@@ -95,6 +264,28 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	examTypes, err := getExamTypes()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	examSets, err := getExamSets()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+
+	setPapers, availablePapers, err := getSetPapers()
+	if err != nil {
+		http.Error(w, "Could not load set papers", http.StatusInternalServerError)
+		return
+	}
+
+	stages, err := getStages()
+	if err != nil {
+		http.Error(w, "Server error", 500)
+		return
+	}
 	studentRows, err := database.DB.Query(`
         SELECT
             u.id,
@@ -162,6 +353,7 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]interface{}{
+		"Stages":             stages,
 		"ActiveQuizzes":      activeQuizzes,
 		"ArchivedQuizzes":    archivedQuizzes,
 		"Students":           students,
@@ -169,6 +361,20 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		"RegisteredUsername": r.URL.Query().Get("username"),
 		"StudentAction":      r.URL.Query().Get("student_action"),
 		"StudentActionName":  r.URL.Query().Get("student_name"),
+		"SearchQuery":        searchQuery,
+		"CurrentPage":        page,
+		"TotalPages":         totalPages,
+		"HasPreviousPage":    page > 1,
+		"HasNextPage":        page < totalPages,
+		"PreviousPage":       page - 1,
+		"NextPage":           page + 1,
+		"TotalQuizzes":       totalQuizzes,
+		"ExamTypes":          examTypes,
+		"ExamSets":           examSets,
+		"SetPapers":          setPapers,
+		"AvailablePapers":    availablePapers,
+		"ExamTypeMessage":    r.URL.Query().Get("exam_type_message"),
+		"ExamTypeError":      r.URL.Query().Get("exam_type_error"),
 	}
 	tmpl.Execute(w, data)
 }
@@ -180,9 +386,17 @@ func CreateQuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, map[string]interface{}{
-		"Stages": stages,
-	})
+	examTypes, err := getExamTypes()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	examSets, err := getExamSets()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, map[string]interface{}{"Stages": stages, "ExamTypes": examTypes, "ExamSets": examSets})
 }
 
 func CreateStudentPageHandler(w http.ResponseWriter, r *http.Request) {
@@ -362,7 +576,6 @@ func CreatePersonalizedPracticePaperHandler(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
 		return
 	}
-
 	quizTitle := strings.TrimSpace(req.Title)
 	if quizTitle == "" {
 		quizTitle = fmt.Sprintf("Personal Practice - %s", studentName)
@@ -763,10 +976,17 @@ func EditQuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, map[string]interface{}{
-		"QuizID": quizID,
-		"Stages": stages,
-	})
+	examTypes, err := getExamTypes()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	examSets, err := getExamSets()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, map[string]interface{}{"QuizID": quizID, "Stages": stages, "ExamTypes": examTypes, "ExamSets": examSets})
 }
 
 func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
@@ -782,6 +1002,10 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := preparePaperSet(&req, 0); err != nil {
+		http.Error(w, "Select a valid draft set for new papers; published sets only allow editing existing papers", 400)
+		return
+	}
 	exists, err := stageExists(req.StageID)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -795,7 +1019,34 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
 		return
 	}
+	req.ExamType = strings.TrimSpace(req.ExamType)
+	if req.ExamType == "" {
+		http.Error(w, "Exam type is required", http.StatusBadRequest)
+		return
+	}
+	examTypeValid, err := examTypeExists(req.ExamType)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !examTypeValid {
+		http.Error(w, "Please select a valid exam type", http.StatusBadRequest)
+		return
+	}
+	examSetValid, err := examSetBelongsToType(req.ExamSetID, req.ExamType)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !examSetValid {
+		http.Error(w, "Please select a valid set for this exam type", http.StatusBadRequest)
+		return
+	}
 
+	if strings.TrimSpace(req.Title) == "" || len(req.Questions) == 0 {
+		http.Error(w, "Title and at least one question are required", 400)
+		return
+	}
 	// Get user ID from session
 	session, _ := middleware.Store.Get(r, "session")
 	userID := session.Values["user_id"].(int)
@@ -810,8 +1061,8 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Insert quiz
 	result, err := tx.Exec(
-		"INSERT INTO quizzes (title, description, created_by, stage_id, time_limit_minutes, lock_after_attempt) VALUES (?, ?, ?, ?, ?, ?)",
-		req.Title, req.Description, userID, req.StageID, req.TimeLimitMinutes, req.shouldLockAfterAttempt(),
+		"INSERT INTO quizzes (title, description, created_by, stage_id, exam_type, exam_set_id, paper_order, time_limit_minutes, lock_after_attempt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		req.Title, req.Description, userID, req.StageID, req.ExamType, req.ExamSetID, req.PaperOrder, req.TimeLimitMinutes, req.shouldLockAfterAttempt(),
 	)
 	if err != nil {
 		http.Error(w, "Failed to create quiz", http.StatusInternalServerError)
@@ -862,9 +1113,9 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	var quiz models.Quiz
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, COALESCE(stage_id, 0), COALESCE(time_limit_minutes, 0), lock_after_attempt FROM quizzes WHERE id = ?",
+		"SELECT id, title, description, COALESCE(stage_id, 0), COALESCE(exam_type, 'General'), COALESCE(exam_set_id, 0), paper_order, COALESCE(time_limit_minutes, 0), lock_after_attempt FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.ExamType, &quiz.ExamSetID, &quiz.PaperOrder, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Quiz not found", http.StatusNotFound)
@@ -944,6 +1195,10 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := preparePaperSet(&req, quizID); err != nil {
+		http.Error(w, "Select a valid draft set for new papers; published sets only allow editing existing papers", 400)
+		return
+	}
 	exists, err := stageExists(req.StageID)
 	if err != nil {
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -957,6 +1212,29 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Time limit cannot be negative", http.StatusBadRequest)
 		return
 	}
+	req.ExamType = strings.TrimSpace(req.ExamType)
+	if req.ExamType == "" {
+		http.Error(w, "Exam type is required", http.StatusBadRequest)
+		return
+	}
+	examTypeValid, err := examTypeExists(req.ExamType)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !examTypeValid {
+		http.Error(w, "Please select a valid exam type", http.StatusBadRequest)
+		return
+	}
+	examSetValid, err := examSetBelongsToType(req.ExamSetID, req.ExamType)
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	if !examSetValid && req.ExamSetID != 0 {
+		http.Error(w, "Please select a valid set for this exam type", http.StatusBadRequest)
+		return
+	}
 
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -966,31 +1244,16 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"UPDATE quizzes SET title = ?, description = ?, stage_id = ?, time_limit_minutes = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
-		req.Title, req.Description, req.StageID, req.TimeLimitMinutes, req.shouldLockAfterAttempt(), quizID,
+		"UPDATE quizzes SET title = ?, description = ?, stage_id = ?, exam_type = ?, exam_set_id = NULLIF(?,0), paper_order = ?, time_limit_minutes = ?, lock_after_attempt = ?, unlock_version = unlock_version + 1 WHERE id = ?",
+		req.Title, req.Description, req.StageID, req.ExamType, req.ExamSetID, req.PaperOrder, req.TimeLimitMinutes, req.shouldLockAfterAttempt(), quizID,
 	)
 	if err != nil {
-		http.Error(w, "Failed to update quiz", http.StatusInternalServerError)
+		http.Error(w, "Could not update paper. A started set cannot change membership or paper order.", http.StatusConflict)
 		return
 	}
 	updated, _ := result.RowsAffected()
 	if updated == 0 {
 		http.Error(w, "Quiz not found", http.StatusNotFound)
-		return
-	}
-
-	if _, err = tx.Exec(`
-        DELETE FROM answers
-        WHERE attempt_id IN (
-            SELECT id FROM quiz_attempts WHERE quiz_id = ?
-        )
-    `, quizID); err != nil {
-		http.Error(w, "Failed to clear existing answers", http.StatusInternalServerError)
-		return
-	}
-
-	if _, err = tx.Exec("DELETE FROM quiz_attempts WHERE quiz_id = ?", quizID); err != nil {
-		http.Error(w, "Failed to clear existing attempts", http.StatusInternalServerError)
 		return
 	}
 
@@ -1064,7 +1327,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	deleteQuery += ")"
 
 	if _, err = tx.Exec(deleteQuery, deleteArgs...); err != nil {
-		http.Error(w, "Failed to remove deleted questions", http.StatusInternalServerError)
+		http.Error(w, "Questions with recorded answers cannot be removed. Edit their content instead.", http.StatusConflict)
 		return
 	}
 
@@ -1091,7 +1354,7 @@ func ArchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := database.DB.Exec("UPDATE quizzes SET is_archived = 1 WHERE id = ?", quizID)
 	if err != nil {
-		http.Error(w, "Failed to archive exam", http.StatusInternalServerError)
+		http.Error(w, "Cannot archive a paper in a set students have started.", http.StatusConflict)
 		return
 	}
 
@@ -1118,7 +1381,7 @@ func UnarchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := database.DB.Exec("UPDATE quizzes SET is_archived = 0 WHERE id = ?", quizID)
 	if err != nil {
-		http.Error(w, "Failed to restore exam", http.StatusInternalServerError)
+		http.Error(w, "Cannot restore a paper into a set students have started.", http.StatusConflict)
 		return
 	}
 
@@ -1187,7 +1450,7 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := tx.Exec("DELETE FROM quizzes WHERE id = ?", quizID)
 	if err != nil {
-		http.Error(w, "Failed to delete quiz", http.StatusInternalServerError)
+		http.Error(w, "Cannot delete a paper from a set students have started.", http.StatusConflict)
 		return
 	}
 

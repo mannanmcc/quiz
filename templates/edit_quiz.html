@@ -32,7 +32,7 @@
 
                 <div class="form-group">
                     <label>Stage</label>
-                    <select name="stage_id" required>
+                    <select name="stage_id" onchange="filterExamSets(this.form)" required>
                         <option value="">Select stage</option>
                         {{range .Stages}}
                         <option value="{{.ID}}">{{.Name}}</option>
@@ -41,6 +41,29 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Exam type</label>
+                    <select name="exam_type" onchange="filterExamSets(this.form)" required>
+                        <option value="">Select exam type</option>
+                        {{range .ExamTypes}}
+                        <option value="{{.Name}}">{{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Exam set</label>
+                    <p><a href="/admin/dashboard#exam-sets" target="_blank" rel="noopener">Create or manage sets</a> · After creating a set, reload this form before entering your exam.</p>
+                    <select name="exam_set_id" required>
+                        <option value="">Select exam set</option>
+                        <option value="0" hidden disabled>Personalized practice</option>
+                        {{range .ExamSets}}
+                        <option value="{{.ID}}" data-exam-type="{{.ExamTypeName}}" data-stage-id="{{.StageID}}">{{.ExamTypeName}} — {{.StageName}} — {{.Name}}</option>
+                        {{end}}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Paper display order</label><input type="number" name="paper_order" min="1" value="1" required>
                     <label>Time Limit (minutes)</label>
                     <input type="number" name="time_limit_minutes" min="0" value="0" placeholder="0 means no timer">
                 </div>
@@ -56,6 +79,17 @@
                     <h2>Questions</h2>
                 </div>
 
+                <section class="form-group passage-builder" aria-labelledby="passage-heading">
+                    <h3 id="passage-heading">Reading passage / shared context</h3>
+                    <p>Add a paragraph or passage, then choose how many questions will refer to it. Students will see the passage before that group of questions.</p>
+                    <label for="reading-passage">Passage</label>
+                    <textarea id="reading-passage" rows="8" placeholder="Type or paste the reading passage here. Use blank lines to separate paragraphs."></textarea>
+                    <label for="passage-question-count">Number of questions about this passage</label>
+                    <input id="passage-question-count" type="number" min="1" max="50" value="3">
+                    <button type="button" class="btn btn-secondary" onclick="addPassageQuestions()">Add passage and questions</button>
+                    <p id="passage-message" role="status"></p>
+                </section>
+
                 <div id="questionsContainer"></div>
 
                 <button type="button" class="btn btn-primary" onclick="addQuestion()" style="margin-bottom: 1rem;">Add Question</button>
@@ -67,6 +101,6 @@
     <script>
         window.editQuizID = {{.QuizID}};
     </script>
-    <script src="/static/js/app.js?v=20260628-remove-debug-badge"></script>
+    <script src="/static/js/app.js?v=20260927-question-input-image-paste"></script>
 </body>
 </html>

@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260927-exam-sets">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-brand">🎓 QUIZ - Admin</div>
         <div class="nav-user">
             <a href="/admin/student/create" class="btn btn-secondary">Register Student</a>
+            <a href="/admin/dashboard#exam-sets" class="btn btn-secondary">Manage Exam Sets</a>
             <a href="/admin/quiz/create" class="btn btn-primary">Create New Quiz</a>
             <a href="/admin/personalized-practice" class="btn btn-secondary">Personalized Paper</a>
             <a href="/logout" class="btn btn-secondary">Logout</a>
@@ -36,10 +37,26 @@
         <div class="dashboard-tabs" role="tablist" aria-label="Admin dashboard sections">
             <a class="dashboard-tab active" href="#quizzes" data-dashboard-tab="quizzes" role="tab">Quizzes</a>
             <a class="dashboard-tab" href="#students" data-dashboard-tab="students" role="tab">Students</a>
+            <a class="dashboard-tab" href="#exam-types" data-dashboard-tab="exam-types" role="tab">Exam Types</a>
+            <a class="dashboard-tab" href="#exam-sets" data-dashboard-tab="exam-sets" role="tab">Exam Sets</a>
         </div>
 
         <section id="quizzesPanel" class="dashboard-panel active" data-dashboard-panel="quizzes">
         <div class="dashboard-section">
+            <div class="section-heading">
+                <h2>Exam Papers</h2>
+                <span class="quiz-date">{{.TotalQuizzes}} paper(s) found</span>
+            </div>
+            <form method="get" class="exam-search" role="search">
+                <label for="exam-search-input">Find an exam paper</label>
+                <div class="exam-search-controls">
+                    <input id="exam-search-input" type="search" name="search" value="{{.SearchQuery}}" placeholder="Search title, description, type, stage, or creator">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    {{if .SearchQuery}}
+                    <a href="/admin/dashboard#quizzes" class="btn btn-secondary">Clear</a>
+                    {{end}}
+                </div>
+            </form>
             <h2>Live Quizzes</h2>
             <div class="exam-table-wrap">
                 <table class="exam-table">
@@ -48,6 +65,7 @@
                             <th>Exam / Quiz</th>
                             <th>Description</th>
                             <th>Stage</th>
+							<th>Exam type</th>
                             <th>Time Limit</th>
                             <th>Created</th>
                             <th>Created By</th>
@@ -61,6 +79,7 @@
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
                             <td><span class="badge badge-info">{{.stage_name}}</span></td>
+							<td><span class="badge badge-info">{{.exam_type}}</span></td>
                             <td>{{if .time_limit_minutes}}{{.time_limit_minutes}} min{{else}}None{{end}}</td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
@@ -80,7 +99,7 @@
                         </tr>
                         {{else}}
                         <tr>
-                            <td class="empty-message" colspan="8">No live quizzes available.</td>
+                            <td class="empty-message" colspan="9">No live quizzes available.</td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -98,6 +117,7 @@
                             <th>Exam / Quiz</th>
                             <th>Description</th>
                             <th>Stage</th>
+							<th>Exam type</th>
                             <th>Time Limit</th>
                             <th>Created</th>
                             <th>Created By</th>
@@ -111,6 +131,7 @@
                             <td class="exam-title">{{.title}}</td>
                             <td class="exam-description">{{.description}}</td>
                             <td><span class="badge badge-info">{{.stage_name}}</span></td>
+							<td><span class="badge badge-info">{{.exam_type}}</span></td>
                             <td>{{if .time_limit_minutes}}{{.time_limit_minutes}} min{{else}}None{{end}}</td>
                             <td>{{.created_at}}</td>
                             <td>{{.created_by}}</td>
@@ -127,6 +148,22 @@
                 </table>
             </div>
         </div>
+        {{end}}
+
+        {{if gt .TotalPages 1}}
+        <nav class="pagination" aria-label="Exam paper pages">
+            {{if .HasPreviousPage}}
+            <a class="btn btn-secondary" href="/admin/dashboard?search={{.SearchQuery}}&page={{.PreviousPage}}#quizzes">Previous</a>
+            {{else}}
+            <button class="btn btn-secondary" disabled>Previous</button>
+            {{end}}
+            <span>Page {{.CurrentPage}} of {{.TotalPages}}</span>
+            {{if .HasNextPage}}
+            <a class="btn btn-secondary" href="/admin/dashboard?search={{.SearchQuery}}&page={{.NextPage}}#quizzes">Next</a>
+            {{else}}
+            <button class="btn btn-secondary" disabled>Next</button>
+            {{end}}
+        </nav>
         {{end}}
 
         <div id="resultsContainer" class="report-panel" aria-live="polite"></div>
@@ -195,8 +232,119 @@
                 </div>
             </div>
         </section>
+
+        <section id="exam-typesPanel" class="dashboard-panel" data-dashboard-panel="exam-types">
+            <div class="dashboard-section">
+                <h2>Manage Exam Types</h2>
+                <p>Create the categories that administrators can assign to exam papers.</p>
+                {{if .ExamTypeMessage}}
+                <div class="alert alert-success dashboard-alert">{{.ExamTypeMessage}}</div>
+                {{end}}
+                {{if .ExamTypeError}}
+                <div class="alert alert-error dashboard-alert">{{.ExamTypeError}}</div>
+                {{end}}
+                <form method="post" action="/admin/exam-types" class="exam-type-form">
+                    <label for="exam-type-name">New exam type</label>
+                    <div class="exam-search-controls">
+                        <input id="exam-type-name" name="name" type="text" maxlength="100" placeholder="e.g., CSSE" required>
+                        <button type="submit" class="btn btn-primary">Add Exam Type</button>
+                    </div>
+                </form>
+                <div class="exam-table-wrap">
+                    <table class="exam-table">
+                        <thead><tr><th>Exam Type</th><th>Created</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            {{range .ExamTypes}}
+                            <tr>
+                                <td class="exam-title">{{.Name}}</td>
+                                <td>{{.CreatedAt}}</td>
+                                <td>
+                                    <a class="btn btn-primary" href="/admin/dashboard?exam_type_id={{.ID}}#exam-sets">Add Set</a>
+                                    <form method="post" action="/admin/exam-types/{{.ID}}/delete" onsubmit="return confirm('Delete this exam type?');">
+                                        <button class="btn btn-danger" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {{else}}
+                            <tr><td class="empty-message" colspan="3">No exam types created yet.</td></tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+        </section>
+        <section id="exam-setsPanel" class="dashboard-panel" data-dashboard-panel="exam-sets">
+            <div class="dashboard-section">
+                <h2>Manage Exam Sets</h2>
+                {{if .ExamTypeMessage}}<div class="alert alert-success dashboard-alert">{{.ExamTypeMessage}}</div>{{end}}
+                {{if .ExamTypeError}}<div class="alert alert-error dashboard-alert">{{.ExamTypeError}}</div>{{end}}
+                <p>Create a draft set for a board and stage, add its papers, then publish. Students unlock sets in sequence. Edit titles below. Changing a draft set’s exam type or stage also updates all its papers. Membership and sequence are fixed once students start.</p>
+                <form method="post" action="/admin/exam-sets" class="exam-type-form">
+                    <label for="exam-set-type">Add a set to an exam type</label>
+                    <div class="exam-search-controls">
+                        <select id="exam-set-type" name="exam_type_id" required>
+                            <option value="">Select exam type</option>
+                            {{range .ExamTypes}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+                        </select>
+                        <select name="stage_id" aria-label="Stage for new set" required><option value="">Select stage</option>{{range .Stages}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+                        <input name="name" type="text" maxlength="100" aria-label="Set name" placeholder="e.g., Set 1" required>
+                        <input name="sequence_number" type="number" min="1" placeholder="Sequence (1, 2, 3…)" aria-label="Set sequence" required>
+                        <button type="submit" class="btn btn-primary">Add Set</button>
+                    </div>
+                </form>
+                <div class="exam-table-wrap">
+                    <table class="exam-table"><thead><tr><th>Board / Stage</th><th>Set / Papers</th><th>Sequence / Publication</th><th>Actions</th></tr></thead><tbody>
+                        {{range .ExamSets}}{{$set := .}}<tr>
+                        <td>
+                            <label for="set-type-{{.ID}}">Exam type</label>
+                            <select id="set-type-{{.ID}}" name="exam_type_id" form="edit-set-{{.ID}}" required {{if or .Started .Published}}disabled{{end}}>
+                                {{range $.ExamTypes}}<option value="{{.ID}}" {{if eq .ID $set.ExamTypeID}}selected{{end}}>{{.Name}}</option>{{end}}
+                            </select>
+                            <label for="set-stage-{{.ID}}">Stage</label>
+                            <select id="set-stage-{{.ID}}" name="stage_id" form="edit-set-{{.ID}}" required {{if or .Started .Published}}disabled{{end}}>
+                                {{range $.Stages}}<option value="{{.ID}}" {{if eq .ID $set.StageID}}selected{{end}}>{{.Name}}</option>{{end}}
+                            </select>
+                            {{if or .Started .Published}}<input form="edit-set-{{.ID}}" type="hidden" name="exam_type_id" value="{{.ExamTypeID}}"><input form="edit-set-{{.ID}}" type="hidden" name="stage_id" value="{{.StageID}}">{{end}}
+                        </td>
+                        <td><input aria-label="Set title" id="set-name-{{.ID}}" form="edit-set-{{.ID}}" name="name" value="{{.Name}}" maxlength="100" required>
+                            <p><strong>Papers in this set ({{len (index $.SetPapers .ID)}})</strong></p>
+                            <ul>
+                                {{range index $.SetPapers .ID}}<li><a href="/admin/quiz/{{.ID}}/edit">{{.Title}}</a> <small>#{{.ID}}{{if .Archived}} · Archived{{end}}</small></li>
+                                {{else}}<li>No papers added yet.</li>{{end}}
+                            </ul>
+                            {{if .Started}}<p>Students have started this set. You can still rename it.</p>{{else if .Published}}<p>Save as Draft to change its exam type or stage.</p>{{end}}
+                        </td>
+                        <td><form id="edit-set-{{.ID}}" method="post" action="/admin/exam-sets/{{.ID}}/update">
+                            <label for="set-sequence-{{.ID}}">Sequence</label><input id="set-sequence-{{.ID}}" name="sequence_number" type="number" min="1" value="{{.SequenceNumber}}" required {{if .Started}}readonly{{end}}>
+                            <label for="set-status-{{.ID}}">Status</label><select id="set-status-{{.ID}}" name="is_published" {{if .Started}}disabled{{end}}><option value="0" {{if not .Published}}selected{{end}}>Draft</option><option value="1" {{if .Published}}selected{{end}}>Published</option></select>
+                            {{if .Started}}<input type="hidden" name="is_published" value="{{if .Published}}1{{else}}0{{end}}">{{end}}
+                            <button class="btn btn-primary">Save Changes</button>
+                        </form></td>
+                        <td>
+                            {{if .Started}}<p>Students have started this set; papers cannot be added.</p>
+                            {{else if .Published}}<p>Save as Draft to add papers.</p>
+                            {{else}}
+                            <a class="btn btn-primary" href="/admin/quiz/create?exam_set_id={{.ID}}">Create New Exam</a>
+                            <form method="post" action="/admin/exam-sets/{{.ID}}/assign">
+                                <input type="hidden" name="return_to" value="exam-sets">
+                                <label for="add-paper-{{.ID}}">Add existing exam</label>
+                                <select id="add-paper-{{.ID}}" name="quiz_id" required>
+                                    <option value="">Choose an exam</option>
+                                    {{range $.AvailablePapers}}{{if ne .SetID $set.ID}}<option value="{{.ID}}">{{.Title}} (#{{.ID}}) — {{.Board}} / {{.Stage}} / {{.SetName}}</option>{{end}}{{end}}
+                                </select>
+                                <p>Adding an exam moves it from its current set and matches this set’s exam type and stage.</p>
+                                <button class="btn btn-primary" type="submit">Add to This Set</button>
+                            </form>
+                            <a class="btn btn-secondary" href="/admin/exam-sets/{{.ID}}/assign">Find &amp; Assign Exam</a>
+                            {{end}}
+                            <form method="post" action="/admin/exam-sets/{{.ID}}/delete" onsubmit="return confirm('Delete this exam set?');"><button class="btn btn-danger" type="submit">Delete</button></form></td></tr>
+                        {{else}}<tr><td class="empty-message" colspan="4">No exam sets created yet.</td></tr>{{end}}
+                    </tbody></table>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <script src="/static/js/app.js?v=20260728-mistakes-report"></script>
+    <script src="/static/js/app.js?v=20260927-set-management"></script>
 </body>
 </html>

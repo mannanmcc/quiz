@@ -263,6 +263,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     initializeDashboardTabs();
+    const selection = new URLSearchParams(window.location.search);
+    const setType = document.getElementById('exam-set-type');
+    if (setType && selection.has('exam_type_id')) {
+        setType.value = selection.get('exam_type_id');
+    }
+    const createForm = document.getElementById('createQuizForm');
+    if (createForm && selection.has('exam_set_id')) {
+        const option = Array.from(createForm.elements.exam_set_id.options)
+            .find(item => item.value === selection.get('exam_set_id'));
+        if (option) {
+            createForm.elements.stage_id.value = option.dataset.stageId;
+            createForm.elements.exam_type.value = option.dataset.examType;
+            createForm.elements.exam_set_id.value = option.value;
+            filterExamSets(createForm);
+        }
+    }
 });
 
 function initializeDashboardTabs() {
@@ -295,6 +311,7 @@ function initializeDashboardTabs() {
         });
     });
 
+    window.addEventListener('hashchange', () => activateTab(window.location.hash.slice(1)));
     activateTab(window.location.hash.replace('#', '') || 'quizzes');
 }
 
@@ -329,20 +346,43 @@ function initQuestionDiagram(questionNumber, existingDiagram = '') {
     const clearButton = document.getElementById(`clear_diagram_${questionNumber}`);
     const diagramTools = document.getElementById(`diagram_tools_${questionNumber}`);
     const showButton = document.getElementById(`show_diagram_${questionNumber}`);
-    if (!canvas || !diagramInput || !clearButton || !diagramTools || !showButton) return;
+    const imageInput = document.getElementById(`diagram_image_${questionNumber}`);
+    const pasteStatus = document.getElementById(`diagram_paste_status_${questionNumber}`);
+    if (!canvas || !diagramInput || !clearButton || !diagramTools || !showButton || !imageInput || !pasteStatus) return;
 
     const context = canvas.getContext('2d');
     context.lineWidth = 3;
     context.lineCap = 'round';
     context.strokeStyle = '#111827';
 
-    if (existingDiagram) {
+    function loadDiagramImage(source) {
         diagramTools.hidden = false;
         showButton.hidden = true;
         const image = new Image();
-        image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        image.src = existingDiagram;
-        diagramInput.value = existingDiagram;
+        image.onload = () => {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            const width = image.width * scale;
+            const height = image.height * scale;
+            context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+            saveDiagram();
+            pasteStatus.textContent = 'Image added. You can draw on it or clear it.';
+        };
+        image.onerror = () => { pasteStatus.textContent = 'That image could not be loaded.'; };
+        image.src = source;
+    }
+
+    function loadDiagramFile(file) {
+        if (!file || !file.type.startsWith('image/')) return false;
+        const reader = new FileReader();
+        reader.onload = () => loadDiagramImage(reader.result);
+        reader.onerror = () => { pasteStatus.textContent = 'That image could not be read.'; };
+        reader.readAsDataURL(file);
+        return true;
+    }
+
+    if (existingDiagram) {
+        loadDiagramImage(existingDiagram);
     }
 
     let isDrawing = false;
@@ -361,6 +401,7 @@ function initQuestionDiagram(questionNumber, existingDiagram = '') {
 
     canvas.addEventListener('pointerdown', (event) => {
         event.preventDefault();
+        canvas.focus();
         isDrawing = true;
         canvas.setPointerCapture(event.pointerId);
         const point = getPoint(event);
@@ -391,12 +432,46 @@ function initQuestionDiagram(questionNumber, existingDiagram = '') {
     clearButton.addEventListener('click', () => {
         context.clearRect(0, 0, canvas.width, canvas.height);
         diagramInput.value = '';
+        imageInput.value = '';
+        pasteStatus.textContent = '';
     });
 
     showButton.addEventListener('click', () => {
         diagramTools.hidden = false;
         showButton.hidden = true;
+        diagramTools.focus();
     });
+
+    imageInput.addEventListener('change', () => loadDiagramFile(imageInput.files[0]));
+    diagramTools.addEventListener('paste', (event) => {
+        const imageItem = Array.from(event.clipboardData?.items || [])
+            .find(item => item.type.startsWith('image/'));
+        if (!imageItem) {
+            pasteStatus.textContent = 'The clipboard does not contain an image.';
+            return;
+        }
+        event.preventDefault();
+        loadDiagramFile(imageItem.getAsFile());
+    });
+}
+
+function setQuestionTextMode(questionNumber, multiline) {
+    const current = document.querySelector(`[name="question_text_${questionNumber}"]`);
+    const toggle = document.getElementById(`question_text_mode_${questionNumber}`);
+    if (!current || !toggle) return;
+
+    const replacement = document.createElement(multiline ? 'textarea' : 'input');
+    replacement.name = current.name;
+    replacement.id = current.id;
+    replacement.required = true;
+    replacement.placeholder = 'Add the actual question students answer';
+    replacement.value = current.value;
+    if (multiline) replacement.rows = 4;
+    else replacement.type = 'text';
+    current.replaceWith(replacement);
+    toggle.textContent = multiline ? 'Use single line' : 'Use multiple lines';
+    toggle.setAttribute('aria-pressed', multiline ? 'true' : 'false');
+    replacement.focus();
 }
 
 function initQuestionContext(questionNumber) {
@@ -433,6 +508,29 @@ function initAnswerExplanation(questionNumber) {
     });
 }
 
+function addPassageQuestions() {
+    const passageField = document.getElementById('reading-passage');
+    const countField = document.getElementById('passage-question-count');
+    const message = document.getElementById('passage-message');
+    const passage = passageField.value.trim();
+    const count = Number(countField.value);
+    if (!passage) {
+        message.textContent = 'Enter a passage first.';
+        passageField.focus();
+        return;
+    }
+    if (!Number.isInteger(count) || count < 1 || count > 50) {
+        message.textContent = 'Choose between 1 and 50 questions.';
+        countField.focus();
+        return;
+    }
+    const first = questionCount + 1;
+    for (let i = 0; i < count; i++) addQuestion({ question_context: passage });
+    message.textContent = `Passage added to questions ${first}–${questionCount}. Fill in their questions and answers below, then save the exam.`;
+    passageField.value = '';
+    document.getElementById(`question-${first}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function addQuestion(question = {}) {
     questionCount++;
     const questionsDiv = document.getElementById('questionsContainer');
@@ -442,6 +540,8 @@ function addQuestion(question = {}) {
     const questionContext = question.question_context || '';
     const questionDiagram = question.question_diagram || '';
     const answerExplanation = question.answer_explanation || '';
+    const questionText = question.question_text || '';
+    const multilineQuestion = questionText.includes('\n');
     
     const questionDiv = document.createElement('div');
     questionDiv.className = 'question-builder';
@@ -465,15 +565,23 @@ function addQuestion(question = {}) {
         </div>
 
         <div class="form-group">
-            <label>Question Text</label>
-            <textarea name="question_text_${questionCount}" rows="3" placeholder="Add the actual question students answer" required>${escapeHTML(question.question_text)}</textarea>
+            <div class="support-panel-header">
+                <label for="question_text_${questionCount}">Question Text</label>
+                <button type="button" class="btn btn-secondary btn-small" id="question_text_mode_${questionCount}" aria-pressed="${multilineQuestion}" onclick="setQuestionTextMode(${questionCount}, this.getAttribute('aria-pressed') !== 'true')">${multilineQuestion ? 'Use single line' : 'Use multiple lines'}</button>
+            </div>
+            ${multilineQuestion
+                ? `<textarea id="question_text_${questionCount}" name="question_text_${questionCount}" rows="4" placeholder="Add the actual question students answer" required>${escapeHTML(questionText)}</textarea>`
+                : `<input id="question_text_${questionCount}" type="text" name="question_text_${questionCount}" value="${escapeAttribute(questionText)}" placeholder="Add the actual question students answer" required>`}
         </div>
 
         <div class="form-group">
             <input type="hidden" id="question_diagram_${questionCount}" name="question_diagram_${questionCount}" value="${escapeAttribute(questionDiagram)}">
             <button type="button" class="btn btn-secondary btn-small" id="show_diagram_${questionCount}" ${questionDiagram ? 'hidden' : ''}>Add Diagram</button>
-            <div class="diagram-tools" id="diagram_tools_${questionCount}" ${questionDiagram ? '' : 'hidden'}>
-                <canvas id="question_diagram_canvas_${questionCount}" class="diagram-canvas" width="720" height="360"></canvas>
+            <div class="diagram-tools" id="diagram_tools_${questionCount}" tabindex="0" aria-label="Diagram editor. Paste an image here or draw on the canvas." ${questionDiagram ? '' : 'hidden'}>
+                <p>Paste a graph or screenshot here, choose an image, or draw on the canvas.</p>
+                <input id="diagram_image_${questionCount}" type="file" accept="image/*">
+                <p id="diagram_paste_status_${questionCount}" class="diagram-paste-status" role="status"></p>
+                <canvas id="question_diagram_canvas_${questionCount}" class="diagram-canvas" width="720" height="360" tabindex="0" aria-label="Draw a diagram or paste an image"></canvas>
                 <button type="button" class="btn btn-secondary btn-small" id="clear_diagram_${questionCount}">Clear Diagram</button>
             </div>
         </div>
@@ -538,9 +646,29 @@ function removeQuestion(id) {
     }
 }
 
+function filterExamSets(form) {
+    const examType = form.elements.exam_type.value;
+    const examSet = form.elements.exam_set_id;
+    Array.from(examSet.options).forEach(option => {
+        if (!option.value || option.value === '0') return;
+        option.hidden = option.dataset.examType !== examType || option.dataset.stageId !== form.elements.stage_id.value;
+        option.disabled = option.hidden;
+    });
+    if (examSet.selectedOptions[0] && examSet.selectedOptions[0].hidden) {
+        examSet.value = '';
+    }
+}
+
 // Submit Quiz Creation
 async function submitQuiz(event, quizId = null) {
     event.preventDefault();
+    const pendingPassage = document.getElementById('reading-passage');
+    if (pendingPassage && pendingPassage.value.trim()) {
+        document.getElementById('passage-message').textContent = 'Click Add passage and questions before saving, or clear this passage if you do not want to include it.';
+        pendingPassage.focus();
+        return;
+    }
+
     
     const form = event.target;
     const formData = new FormData(form);
@@ -548,6 +676,8 @@ async function submitQuiz(event, quizId = null) {
     const title = formData.get('quiz_title');
     const description = formData.get('quiz_description');
     const stageID = parseInt(formData.get('stage_id'), 10);
+	const examType = formData.get('exam_type').trim();
+	const examSetID = parseInt(formData.get('exam_set_id'), 10);
     const timeLimitMinutes = parseInt(formData.get('time_limit_minutes') || '0', 10);
     const lockAfterAttempt = formData.get('do_not_lock_after_attempt') !== 'on';
     
@@ -601,6 +731,9 @@ async function submitQuiz(event, quizId = null) {
                 title: title,
                 description: description,
                 stage_id: stageID,
+				exam_type: examType,
+				exam_set_id: examSetID,
+                paper_order: parseInt(formData.get("paper_order"), 10) || 1,
                 time_limit_minutes: Number.isNaN(timeLimitMinutes) ? 0 : timeLimitMinutes,
                 lock_after_attempt: lockAfterAttempt,
                 questions: questions
@@ -635,6 +768,15 @@ async function loadQuizForEdit(quizId) {
         form.elements.quiz_title.value = data.quiz.title || '';
         form.elements.quiz_description.value = data.quiz.description || '';
         form.elements.stage_id.value = data.quiz.stage_id || '';
+		form.elements.exam_type.value = data.quiz.exam_type || '';
+		const practiceOption = form.elements.exam_set_id.querySelector('option[value="0"]');
+        if (practiceOption) {
+            practiceOption.hidden = Boolean(data.quiz.exam_set_id);
+            practiceOption.disabled = Boolean(data.quiz.exam_set_id);
+        }
+        form.elements.exam_set_id.value = data.quiz.exam_set_id || '0';
+        form.elements.paper_order.value = data.quiz.paper_order || 1;
+		filterExamSets(form);
         form.elements.time_limit_minutes.value = data.quiz.time_limit_minutes || 0;
         form.elements.do_not_lock_after_attempt.checked = !Boolean(data.quiz.lock_after_attempt);
 

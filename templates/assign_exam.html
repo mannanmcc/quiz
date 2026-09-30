@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Assign an exam — {{.SetName}}</title><link rel="stylesheet" href="/static/css/style.css"></head>
+<body><nav class="navbar"><div class="nav-brand">QUIZ — Admin</div><div class="nav-user"><a class="btn btn-secondary" href="/admin/dashboard#exam-sets">Back to Exam Sets</a></div></nav>
+<main class="container"><div class="dashboard-section">
+<h2>Find and assign an exam</h2><p><strong>{{.Board}} / {{.Stage}} / {{.SetName}}</strong></p>
+<p>Search existing exams by title, description, exam type, set, or exam ID. Assigning an exam moves it from its current set and changes its exam type and stage to match this set. Questions and attempt history are retained.</p>
+{{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+{{if .Message}}<div class="alert alert-success" role="status">{{.Message}}</div>{{end}}
+{{if .Started}}<p>This set has been started by students; its papers cannot be changed.</p>{{else if .Published}}<p>Unpublish this set in Exam Sets before assigning papers.</p>{{end}}
+<form method="get" class="exam-search"><label for="assignment-search">Find an exam</label><div class="exam-search-controls"><input id="assignment-search" name="search" type="search" value="{{.Search}}" placeholder="Title, exam type, set, or ID"><button class="btn btn-primary">Search</button><a class="btn btn-secondary" href="/admin/exam-sets/{{.SetID}}/assign">Clear</a></div></form>
+<div class="exam-table-wrap"><table class="exam-table"><thead><tr><th>Exam</th><th>Current stage</th><th>Current type / set</th><th>Assign</th></tr></thead><tbody>
+{{range .Papers}}<tr><td>{{.Title}} <small>#{{.ID}}</small></td><td>{{.Stage}}</td><td>{{.Board}} / {{.Set}}</td><td>
+{{if .Reason}}{{.Reason}}{{else if or $.Published $.Started}}Set unavailable for assignment{{else}}
+<form method="post" action="/admin/exam-sets/{{$.SetID}}/assign"><input type="hidden" name="quiz_id" value="{{.ID}}"><input type="hidden" name="search" value="{{$.Search}}"><button class="btn btn-primary">Assign to this set</button></form>
+{{end}}</td></tr>{{else}}<tr><td colspan="4">No exams match your search.</td></tr>{{end}}
+</tbody></table></div>
+<div class="table-actions">{{if .HasPrevious}}<a class="btn btn-secondary" href="{{.PreviousURL}}">Previous</a>{{end}}{{if .HasNext}}<a class="btn btn-secondary" href="{{.NextURL}}">Next</a>{{end}}</div>
+</div></main></body></html>

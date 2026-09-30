@@ -17,28 +17,20 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// All quiz entry points share board progression and personalized eligibility.
 func userCanAccessQuiz(userID int, quizID interface{}) (bool, error) {
 	var count int
-	err := database.DB.QueryRow(`
-        SELECT COUNT(*)
-        FROM (
-            SELECT q.id
-            FROM quizzes q
-            JOIN users u ON u.stage_id = q.stage_id
-            WHERE u.id = ? AND q.id = ? AND q.is_archived = 0
-
-            UNION ALL
-
-            SELECT p.quiz_id
-            FROM personalized_quiz_assignments p
-            WHERE p.user_id = ? AND p.quiz_id = ?
-        ) t
-    `, userID, quizID, userID, quizID).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
+	err := database.DB.QueryRow(`SELECT COUNT(*) FROM quizzes q JOIN users u ON u.id=?
+ LEFT JOIN exam_sets es ON es.id=q.exam_set_id
+ LEFT JOIN exam_types et ON et.id=es.exam_type_id
+ WHERE q.id=? AND q.is_archived=0 AND (
+ (q.exam_set_id IS NULL AND EXISTS(SELECT 1 FROM personalized_quiz_assignments p WHERE p.user_id=u.id AND p.quiz_id=q.id))
+ OR (es.stage_id=u.stage_id AND es.is_published=1 AND TRIM(et.name)<>'' AND TRIM(et.name)<>'General' COLLATE NOCASE AND TRIM(q.exam_type)=TRIM(et.name) COLLATE NOCASE AND NOT EXISTS(
+ SELECT 1 FROM exam_sets earlier JOIN quizzes paper ON paper.exam_set_id=earlier.id AND paper.is_archived=0
+ WHERE earlier.exam_type_id=es.exam_type_id AND earlier.stage_id=es.stage_id AND earlier.is_published=1
+ AND earlier.sequence_number<es.sequence_number AND TRIM(paper.exam_type)=TRIM(et.name) COLLATE NOCASE
+ AND NOT EXISTS(SELECT 1 FROM paper_completions pc WHERE pc.user_id=u.id AND pc.quiz_id=paper.id))))`, userID, quizID).Scan(&count)
+	return count > 0, err
 }
 
 func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -61,101 +53,26 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get available quizzes
-	rows, err := database.DB.Query(`
-        SELECT id, title, description, created_at, unlock_version, lock_after_attempt, COALESCE(time_limit_minutes, 0)
-        FROM quizzes
-        WHERE is_archived = 0 AND stage_id = ?
-        ORDER BY created_at DESC
-    `, stageID)
+	boards, err := studentBoards(userID, stageID)
 	if err != nil {
-		http.Error(w, "Server error", http.StatusInternalServerError)
+		http.Error(w, "Server error", 500)
 		return
-	}
-	defer rows.Close()
-
-	seenQuizIDs := map[int]bool{}
-	var quizzes []map[string]interface{}
-	for rows.Next() {
-		var id, unlockVersion, timeLimitMinutes int
-		var lockAfterAttempt bool
-		var title, description, createdAt string
-		rows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt, &timeLimitMinutes)
-		seenQuizIDs[id] = true
-
-		var attemptCount int
-		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
-			userID, id).Scan(&attemptCount)
-
-		var currentAttemptCount int
-		database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
-			userID, id, unlockVersion).Scan(&currentAttemptCount)
-
-		quizzes = append(quizzes, map[string]interface{}{
-			"id":                 id,
-			"title":              title,
-			"description":        description,
-			"created_at":         createdAt,
-			"attempts":           attemptCount,
-			"locked":             lockAfterAttempt && currentAttemptCount > 0,
-			"unlock_version":     unlockVersion,
-			"time_limit_minutes": timeLimitMinutes,
-			"lock_after_attempt": lockAfterAttempt,
-			"is_personalized":    false,
-		})
-	}
-
-	personalizedRows, err := database.DB.Query(`
-        SELECT q.id, q.title, q.description, q.created_at, q.unlock_version, q.lock_after_attempt, COALESCE(q.time_limit_minutes, 0)
-        FROM personalized_quiz_assignments p
-        JOIN quizzes q ON q.id = p.quiz_id
-        WHERE p.user_id = ?
-        ORDER BY q.created_at DESC
-    `, userID)
-	if err == nil {
-		defer personalizedRows.Close()
-		for personalizedRows.Next() {
-			var id, unlockVersion, timeLimitMinutes int
-			var lockAfterAttempt bool
-			var title, description, createdAt string
-			personalizedRows.Scan(&id, &title, &description, &createdAt, &unlockVersion, &lockAfterAttempt, &timeLimitMinutes)
-			if seenQuizIDs[id] {
-				continue
-			}
-			seenQuizIDs[id] = true
-
-			var attemptCount int
-			database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ?",
-				userID, id).Scan(&attemptCount)
-
-			var currentAttemptCount int
-			database.DB.QueryRow("SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
-				userID, id, unlockVersion).Scan(&currentAttemptCount)
-
-			quizzes = append(quizzes, map[string]interface{}{
-				"id":                 id,
-				"title":              title,
-				"description":        description,
-				"created_at":         createdAt,
-				"attempts":           attemptCount,
-				"locked":             lockAfterAttempt && currentAttemptCount > 0,
-				"unlock_version":     unlockVersion,
-				"time_limit_minutes": timeLimitMinutes,
-				"lock_after_attempt": lockAfterAttempt,
-				"is_personalized":    true,
-			})
-		}
 	}
 
 	// Get recent attempts
-	attemptsRows, _ := database.DB.Query(`
+	attemptsRows, err := database.DB.Query(`
         SELECT qa.id, q.title, qa.score, qa.max_score, qa.completed_at
         FROM quiz_attempts qa
         JOIN quizzes q ON qa.quiz_id = q.id
         WHERE qa.user_id = ?
+ AND EXISTS(SELECT 1 FROM exam_types et WHERE TRIM(et.name)<>'' AND TRIM(et.name)<>'General' COLLATE NOCASE AND TRIM(et.name)=TRIM(q.exam_type) COLLATE NOCASE)
         ORDER BY qa.completed_at DESC
         LIMIT 5
     `, userID)
+	if err != nil {
+		http.Error(w, "Server error", 500)
+		return
+	}
 	defer attemptsRows.Close()
 
 	var recentAttempts []map[string]interface{}
@@ -165,7 +82,10 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		var score, maxScore int
 		attemptsRows.Scan(&attemptID, &title, &score, &maxScore, &completedAt)
 
-		percentage := float64(score) / float64(maxScore) * 100
+		percentage := 0.0
+		if maxScore > 0 {
+			percentage = float64(score) / float64(maxScore) * 100
+		}
 
 		recentAttempts = append(recentAttempts, map[string]interface{}{
 			"attempt_id":   attemptID,
@@ -180,11 +100,21 @@ func StudentDashboardHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Username":       username,
 		"StageName":      stageName,
-		"Quizzes":        quizzes,
+		"Boards":         boards,
 		"RecentAttempts": recentAttempts,
 	}
 
 	tmpl.Execute(w, data)
+}
+
+// Preserve older category links by opening the board page.
+func ExamCategoryHandler(w http.ResponseWriter, r *http.Request) {
+	var id int
+	if err := database.DB.QueryRow("SELECT id FROM exam_types WHERE name=? COLLATE NOCASE", r.URL.Query().Get("exam_type")).Scan(&id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/student/exam-board/"+strconv.Itoa(id), http.StatusSeeOther)
 }
 
 func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
@@ -199,9 +129,9 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var unlockVersion int
 	var isArchived bool
 	err := database.DB.QueryRow(
-		"SELECT id, title, description, unlock_version, COALESCE(time_limit_minutes, 0), lock_after_attempt, is_archived FROM quizzes WHERE id = ?",
+		"SELECT id, title, COALESCE(exam_type, 'General'), unlock_version, COALESCE(time_limit_minutes, 0), lock_after_attempt, is_archived FROM quizzes WHERE id = ?",
 		quizID,
-	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &unlockVersion, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt, &isArchived)
+	).Scan(&quiz.ID, &quiz.Title, &quiz.ExamType, &unlockVersion, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt, &isArchived)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -226,7 +156,6 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
 		return
 	}
-
 	var attemptCount int
 	err = database.DB.QueryRow(
 		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
@@ -241,6 +170,10 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := recordSetStart(userID, quizID); err != nil {
+		http.Error(w, "Server error", 500)
+		return
+	}
 	// Get questions
 	rows, err := database.DB.Query(`
         SELECT id, COALESCE(question_context, ''), question_text, COALESCE(question_diagram, ''), question_type, option1, option2, option3, option4, points
@@ -322,7 +255,6 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
 		return
 	}
-
 	var attemptCount int
 	err = database.DB.QueryRow(
 		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
@@ -337,6 +269,10 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := recordSetStart(userID, quizID); err != nil {
+		http.Error(w, "Server error", 500)
+		return
+	}
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
 	tmpl := template.Must(template.ParseFiles("templates/quiz.html"))
 
@@ -386,7 +322,6 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
 		return
 	}
-
 	var attemptCount int
 	err = database.DB.QueryRow(
 		"SELECT COUNT(*) FROM quiz_attempts WHERE user_id = ? AND quiz_id = ? AND unlock_version = ?",
@@ -461,15 +396,15 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		report = append(report, map[string]interface{}{
-			"question_id":      questionID,
-			"question_context": questionContext,
-			"question_text":    questionText,
-			"question_diagram": questionDiagram,
+			"question_id":        questionID,
+			"question_context":   questionContext,
+			"question_text":      questionText,
+			"question_diagram":   questionDiagram,
 			"answer_explanation": answerExplanation,
-			"selected_answer":  selectedAnswer,
-			"correct_answer":   correctAnswer,
-			"is_correct":       isCorrect,
-			"points":           points,
+			"selected_answer":    selectedAnswer,
+			"correct_answer":     correctAnswer,
+			"is_correct":         isCorrect,
+			"points":             points,
 		})
 	}
 
@@ -497,7 +432,10 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to save attempt", 500)
+		return
+	}
 
 	percentage := 0.0
 	if maxScore > 0 {
@@ -620,7 +558,7 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 		newPDFLine("Completed: "+completedAt, pdfBlack),
 		newPDFLine(fmt.Sprintf("Score: %d / %d (%.1f%%)", score, maxScore, reportPercentage(score, maxScore)), pdfBlue),
 	}
-	if strings.TrimSpace(quizDescription) != "" {
+	if userID == nil && strings.TrimSpace(quizDescription) != "" {
 		lines = append(lines, newPDFLine("Description: "+quizDescription, pdfBlack))
 	}
 	lines = append(lines, newPDFLine("", pdfBlack), newPDFLine(reviewTitle, pdfBlue))

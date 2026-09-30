@@ -56,12 +56,29 @@ func createTables() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS exam_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS exam_sets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exam_type_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(exam_type_id, name),
+        FOREIGN KEY (exam_type_id) REFERENCES exam_types(id) ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS quizzes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         description TEXT,
         created_by INTEGER,
         stage_id INTEGER,
+        exam_type TEXT NOT NULL DEFAULT 'General',
+        exam_set_id INTEGER,
         unlock_version INTEGER DEFAULT 0,
         time_limit_minutes INTEGER DEFAULT 0,
         lock_after_attempt BOOLEAN DEFAULT 1,
@@ -133,6 +150,8 @@ func createTables() {
 	addColumnIfMissing("quizzes", "lock_after_attempt", "BOOLEAN DEFAULT 1")
 	addColumnIfMissing("quizzes", "is_archived", "BOOLEAN DEFAULT 0")
 	addColumnIfMissing("quizzes", "stage_id", "INTEGER")
+	addColumnIfMissing("quizzes", "exam_type", "TEXT NOT NULL DEFAULT 'General'")
+	addColumnIfMissing("quizzes", "exam_set_id", "INTEGER")
 	addColumnIfMissing("quizzes", "time_limit_minutes", "INTEGER DEFAULT 0")
 	addColumnIfMissing("questions", "question_context", "TEXT")
 	addColumnIfMissing("questions", "question_diagram", "TEXT")
@@ -143,14 +162,32 @@ func createTables() {
 	addColumnIfMissing("quiz_attempts", "unlock_version", "INTEGER DEFAULT 0")
 
 	createDefaultStages()
+	createDefaultExamTypes()
+
 	assignDefaultStage()
 
 	// Create default admin user
 	createDefaultAdmin()
 	runSeedFileIfPresent("seed_year5_vocabulary_exams.sql")
+	createDefaultExamTypes()
+	assignDefaultStage()
+	if err := migrateExamSets(); err != nil {
+		log.Fatal("Exam set migration: ", err)
+	}
 }
 
 func runSeedFileIfPresent(path string) {
+	if _, err := DB.Exec("CREATE TABLE IF NOT EXISTS applied_seeds(path TEXT PRIMARY KEY)"); err != nil {
+		log.Fatal(err)
+	}
+	var applied int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM applied_seeds WHERE path=?", path).Scan(&applied); err != nil {
+		log.Fatal(err)
+	}
+	if applied > 0 {
+		return
+	}
+
 	seedSQL, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -161,6 +198,9 @@ func runSeedFileIfPresent(path string) {
 
 	if _, err := DB.Exec(string(seedSQL)); err != nil {
 		log.Fatal("Error running seed file:", err)
+	}
+	if _, err := DB.Exec("INSERT OR IGNORE INTO applied_seeds(path) VALUES(?)", path); err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -210,6 +250,22 @@ func createDefaultStages() {
 		); err != nil {
 			log.Fatal("Error creating default stages:", err)
 		}
+	}
+}
+
+func createDefaultExamTypes() {
+	if _, err := DB.Exec("INSERT OR IGNORE INTO exam_types (name) VALUES ('General')"); err != nil {
+		log.Fatal("Error creating default exam type:", err)
+	}
+
+	// Preserve all existing free-text categories when upgrading the application.
+	if _, err := DB.Exec(`
+        INSERT OR IGNORE INTO exam_types (name)
+        SELECT DISTINCT TRIM(exam_type)
+        FROM quizzes
+        WHERE TRIM(COALESCE(exam_type, '')) <> ''
+    `); err != nil {
+		log.Fatal("Error migrating existing exam types:", err)
 	}
 }
 

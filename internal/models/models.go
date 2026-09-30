@@ -14,11 +14,14 @@ type User struct {
 }
 
 type Quiz struct {
+	PaperOrder       int       `json:"paper_order"`
 	ID               int       `json:"id"`
 	Title            string    `json:"title"`
 	Description      string    `json:"description"`
 	CreatedBy        int       `json:"created_by"`
 	StageID          int       `json:"stage_id"`
+	ExamType         string    `json:"exam_type"`
+	ExamSetID        int       `json:"exam_set_id"`
 	TimeLimitMinutes int       `json:"time_limit_minutes"`
 	LockAfterAttempt bool      `json:"lock_after_attempt"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -29,6 +32,25 @@ type Stage struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ExamType struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ExamSet struct {
+	StageID        int
+	StageName      string
+	SequenceNumber int
+	Published      bool
+	Started        bool
+	ID             int       `json:"id"`
+	ExamTypeID     int       `json:"exam_type_id"`
+	ExamTypeName   string    `json:"exam_type_name"`
+	Name           string    `json:"name"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type Question struct {

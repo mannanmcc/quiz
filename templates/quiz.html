@@ -18,7 +18,7 @@
         <div id="quizContainer" class="quiz-taking-layout">
             <main class="quiz-main">
                 <h1 id="quizTitle">Loading...</h1>
-                <p id="quizDescription"></p>
+                <p id="quizLoadError"></p>
                 
                 <form id="quizForm" novalidate>
                     <div id="questionsContainer"></div>
@@ -58,7 +58,7 @@
 
         function showLoadError(message) {
             document.getElementById('quizTitle').textContent = 'Unable to load quiz';
-            document.getElementById('quizDescription').textContent = message;
+            document.getElementById('quizLoadError').textContent = message;
             document.getElementById('quizForm').style.display = 'none';
             document.getElementById('timerPanel').style.display = 'none';
         }
@@ -124,14 +124,7 @@
 
             header.append(number, points);
 
-            if (q.question_context) {
-                const context = document.createElement('div');
-                context.className = 'question-context';
-                context.textContent = q.question_context;
-                questionDiv.append(header, context);
-            } else {
-                questionDiv.append(header);
-            }
+            questionDiv.append(header);
 
             const title = document.createElement('div');
             title.className = 'question-text';
@@ -214,7 +207,6 @@
                 const data = await response.json();
 
                 document.getElementById('quizTitle').textContent = data.quiz.title;
-                document.getElementById('quizDescription').textContent = data.quiz.description || '';
                 startTimer(data.quiz.time_limit_minutes || 0);
 
                 const container = document.getElementById('questionsContainer');
@@ -226,6 +218,22 @@
                 }
 
                 data.questions.forEach((q, index) => {
+                    const passage = q.question_context || '';
+                    const previousPassage = index > 0 ? (data.questions[index - 1].question_context || '') : '';
+                    if (passage && passage !== previousPassage) {
+                        let last = index;
+                        while (last + 1 < data.questions.length && data.questions[last + 1].question_context === passage) last++;
+                        const section = document.createElement('section');
+                        section.className = 'question-card reading-passage';
+                        const heading = document.createElement('h2');
+                        heading.style.color = '#24324b';
+                        heading.textContent = last === index ? `Passage for question ${index + 1}` : `Passage for questions ${index + 1}–${last + 1}`;
+                        const content = document.createElement('div');
+                        content.className = 'question-context';
+                        content.textContent = passage;
+                        section.append(heading, content);
+                        container.appendChild(section);
+                    }
                     container.appendChild(renderQuestion(q, index));
                 });
             } catch (error) {
