@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (quizIDs.length === 0) {
-                alert('Please select at least one quiz.');
+                alert('Please select at least one test.');
                 return;
             }
 
@@ -741,14 +741,14 @@ async function submitQuiz(event, quizId = null) {
         });
         
         if (response.ok) {
-            alert(quizId ? 'Quiz updated successfully!' : 'Quiz created successfully!');
+            alert(quizId ? 'Test updated successfully!' : 'Test created successfully!');
             window.location.href = '/admin/dashboard';
         } else {
             const error = await response.text();
-            alert(`Failed to ${quizId ? 'update' : 'create'} quiz: ` + error);
+            alert(`Failed to ${quizId ? 'update' : 'create'} test: ` + error);
         }
     } catch (error) {
-        alert(`Failed to ${quizId ? 'update' : 'create'} quiz. Please try again.`);
+        alert(`Failed to ${quizId ? 'update' : 'create'} test. Please try again.`);
         console.error('Error:', error);
     }
 }
@@ -758,7 +758,7 @@ async function loadQuizForEdit(quizId) {
         const response = await fetch(`/admin/api/quiz/${quizId}`);
         if (!response.ok) {
             const error = await response.text();
-            alert('Failed to load quiz: ' + error);
+            alert('Failed to load test: ' + error);
             window.location.href = '/admin/dashboard';
             return;
         }
@@ -786,8 +786,8 @@ async function loadQuizForEdit(quizId) {
 
         (data.questions || []).forEach(question => addQuestion(question));
     } catch (error) {
-        console.error('Error loading quiz:', error);
-        alert('Failed to load quiz');
+        console.error('Error loading test:', error);
+        alert('Failed to load test');
         window.location.href = '/admin/dashboard';
     }
 }
@@ -816,7 +816,7 @@ async function loadResults(quizId) {
         resultsDiv.innerHTML = '<h2>Student Results</h2>';
         
         if (!Array.isArray(results) || results.length === 0) {
-            resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
+            resultsDiv.innerHTML += '<p>No students have taken this test yet.</p>';
             revealReportPanel(resultsDiv);
             return;
         }
@@ -888,7 +888,7 @@ async function loadProgressReport(quizId) {
         resultsDiv.innerHTML = '<h2>Progress Report</h2>';
 
         if (!Array.isArray(reports) || reports.length === 0) {
-            resultsDiv.innerHTML += '<p>No students have taken this quiz yet.</p>';
+            resultsDiv.innerHTML += '<p>No students have taken this test yet.</p>';
             revealReportPanel(resultsDiv);
             return;
         }

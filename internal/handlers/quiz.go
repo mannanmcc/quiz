@@ -135,7 +135,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Quiz not found", http.StatusNotFound)
+			http.Error(w, "Test not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -143,7 +143,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isArchived {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -153,7 +153,7 @@ func GetQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
+		http.Error(w, "Test not found for your stage", http.StatusNotFound)
 		return
 	}
 	var attemptCount int
@@ -234,7 +234,7 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt, &isArchived)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Quiz not found", http.StatusNotFound)
+			http.Error(w, "Test not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -242,7 +242,7 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isArchived {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -252,7 +252,7 @@ func QuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
+		http.Error(w, "Test not found for your stage", http.StatusNotFound)
 		return
 	}
 	var attemptCount int
@@ -301,7 +301,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	err := database.DB.QueryRow("SELECT unlock_version, lock_after_attempt, is_archived FROM quizzes WHERE id = ?", quizID).Scan(&unlockVersion, &lockAfterAttempt, &isArchived)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Quiz not found", http.StatusNotFound)
+			http.Error(w, "Test not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -309,7 +309,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isArchived {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -319,7 +319,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !canAccess {
-		http.Error(w, "Quiz not found for your stage", http.StatusNotFound)
+		http.Error(w, "Test not found for your stage", http.StatusNotFound)
 		return
 	}
 	var attemptCount int
@@ -361,11 +361,11 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = tx.QueryRow("SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = ?", quizID).Scan(&maxScore)
 	if err != nil {
-		http.Error(w, "Failed to score quiz", http.StatusInternalServerError)
+		http.Error(w, "Failed to score test", http.StatusInternalServerError)
 		return
 	}
 	if maxScore == 0 {
-		http.Error(w, "Quiz has no questions", http.StatusBadRequest)
+		http.Error(w, "Test has no questions", http.StatusBadRequest)
 		return
 	}
 
@@ -449,7 +449,7 @@ func SubmitQuizHandler(w http.ResponseWriter, r *http.Request) {
 		"score":            score,
 		"max_score":        maxScore,
 		"percentage":       percentage,
-		"message":          "Quiz submitted successfully",
+		"message":          "Test submitted successfully",
 		"report":           report,
 		"handler_version":  "v2",
 	}
@@ -543,7 +543,7 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 	}
 	defer rows.Close()
 
-	title := "Quiz Test Report"
+	title := "Test Report"
 	reviewTitle := "Answer Review"
 	if mistakesOnly {
 		title = "Mistakes Review Report"
@@ -554,7 +554,7 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 		newPDFLine(title, pdfBlue),
 		newPDFLine("", pdfBlack),
 		newPDFLine("Student: "+studentName+" ("+username+")", pdfBlack),
-		newPDFLine("Quiz: "+quizTitle, pdfBlack),
+		newPDFLine("Test: "+quizTitle, pdfBlack),
 		newPDFLine("Completed: "+completedAt, pdfBlack),
 		newPDFLine(fmt.Sprintf("Score: %d / %d (%.1f%%)", score, maxScore, reportPercentage(score, maxScore)), pdfBlue),
 	}
@@ -629,9 +629,9 @@ func writeQuizReportPDF(w http.ResponseWriter, attemptID int, userID *int, mista
 		return
 	}
 
-	filename := fmt.Sprintf("quiz-report-%d.pdf", attemptID)
+	filename := fmt.Sprintf("test-report-%d.pdf", attemptID)
 	if mistakesOnly {
-		filename = fmt.Sprintf("quiz-mistakes-%d.pdf", attemptID)
+		filename = fmt.Sprintf("test-mistakes-%d.pdf", attemptID)
 	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `inline; filename="`+filename+`"`)

@@ -489,7 +489,7 @@ func CreatePersonalizedPracticePaperHandler(w http.ResponseWriter, r *http.Reque
 	if req.StudentID <= 0 || len(req.QuizIDs) == 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Please select a student and at least one quiz"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Please select a student and at least one test"})
 		return
 	}
 
@@ -566,7 +566,7 @@ func CreatePersonalizedPracticePaperHandler(w http.ResponseWriter, r *http.Reque
 	if len(questions) == 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "No incorrect questions were found for the selected quizzes and student."})
+		json.NewEncoder(w).Encode(map[string]string{"error": "No incorrect questions were found for the selected tests and student."})
 		return
 	}
 
@@ -966,7 +966,7 @@ func EditQuizPageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -1065,7 +1065,7 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 		req.Title, req.Description, userID, req.StageID, req.ExamType, req.ExamSetID, req.PaperOrder, req.TimeLimitMinutes, req.shouldLockAfterAttempt(),
 	)
 	if err != nil {
-		http.Error(w, "Failed to create quiz", http.StatusInternalServerError)
+		http.Error(w, "Failed to create test", http.StatusInternalServerError)
 		return
 	}
 
@@ -1102,7 +1102,7 @@ func CreateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Quiz created successfully",
+		"message": "Test created successfully",
 		"quiz_id": quizID,
 	})
 }
@@ -1118,7 +1118,7 @@ func GetAdminQuizHandler(w http.ResponseWriter, r *http.Request) {
 	).Scan(&quiz.ID, &quiz.Title, &quiz.Description, &quiz.StageID, &quiz.ExamType, &quiz.ExamSetID, &quiz.PaperOrder, &quiz.TimeLimitMinutes, &quiz.LockAfterAttempt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Quiz not found", http.StatusNotFound)
+			http.Error(w, "Test not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -1180,7 +1180,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	quizID, err := strconv.Atoi(vars["quiz_id"])
 	if err != nil {
-		http.Error(w, "Invalid quiz ID", http.StatusBadRequest)
+		http.Error(w, "Invalid test ID", http.StatusBadRequest)
 		return
 	}
 
@@ -1191,7 +1191,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Title == "" || len(req.Questions) == 0 {
-		http.Error(w, "Quiz title and at least one question are required", http.StatusBadRequest)
+		http.Error(w, "Test title and at least one question are required", http.StatusBadRequest)
 		return
 	}
 
@@ -1253,7 +1253,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, _ := result.RowsAffected()
 	if updated == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -1287,7 +1287,7 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 			updated, _ := result.RowsAffected()
 			if updated == 0 {
-				http.Error(w, "Question not found for this quiz", http.StatusBadRequest)
+				http.Error(w, "Question not found for this test", http.StatusBadRequest)
 				return
 			}
 
@@ -1332,13 +1332,13 @@ func UpdateQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to save quiz", http.StatusInternalServerError)
+		http.Error(w, "Failed to save test", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Quiz updated successfully",
+		"message": "Test updated successfully",
 		"quiz_id": quizID,
 	})
 }
@@ -1360,13 +1360,13 @@ func ArchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	updated, _ := result.RowsAffected()
 	if updated == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Quiz archived successfully",
+		"message": "Test archived successfully",
 	})
 }
 
@@ -1387,13 +1387,13 @@ func UnarchiveQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	updated, _ := result.RowsAffected()
 	if updated == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Quiz restored successfully",
+		"message": "Test restored successfully",
 	})
 }
 
@@ -1416,7 +1416,7 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 	var quizTitle string
 	if err := tx.QueryRow("SELECT title FROM quizzes WHERE id = ?", quizID).Scan(&quizTitle); err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Quiz not found", http.StatusNotFound)
+			http.Error(w, "Test not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Server error", http.StatusInternalServerError)
@@ -1424,7 +1424,7 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err = tx.Exec("INSERT OR IGNORE INTO deleted_seed_quizzes (title) VALUES (?)", quizTitle); err != nil {
-		http.Error(w, "Failed to record quiz deletion", http.StatusInternalServerError)
+		http.Error(w, "Failed to record test deletion", http.StatusInternalServerError)
 		return
 	}
 
@@ -1434,17 +1434,17 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
             SELECT id FROM quiz_attempts WHERE quiz_id = ?
         )
     `, quizID); err != nil {
-		http.Error(w, "Failed to delete quiz answers", http.StatusInternalServerError)
+		http.Error(w, "Failed to delete test answers", http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = tx.Exec("DELETE FROM quiz_attempts WHERE quiz_id = ?", quizID); err != nil {
-		http.Error(w, "Failed to delete quiz attempts", http.StatusInternalServerError)
+		http.Error(w, "Failed to delete test attempts", http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = tx.Exec("DELETE FROM questions WHERE quiz_id = ?", quizID); err != nil {
-		http.Error(w, "Failed to delete quiz questions", http.StatusInternalServerError)
+		http.Error(w, "Failed to delete test questions", http.StatusInternalServerError)
 		return
 	}
 
@@ -1456,7 +1456,7 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	deleted, _ := result.RowsAffected()
 	if deleted == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -1467,7 +1467,7 @@ func DeleteQuizHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Quiz deleted successfully",
+		"message": "Test deleted successfully",
 	})
 }
 
@@ -1636,12 +1636,12 @@ func ResetQuizAttemptsHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := database.DB.Exec("UPDATE quizzes SET unlock_version = unlock_version + 1 WHERE id = ?", quizID)
 	if err != nil {
-		http.Error(w, "Failed to unlock quiz", http.StatusInternalServerError)
+		http.Error(w, "Failed to unlock test", http.StatusInternalServerError)
 		return
 	}
 	updated, _ := result.RowsAffected()
 	if updated == 0 {
-		http.Error(w, "Quiz not found", http.StatusNotFound)
+		http.Error(w, "Test not found", http.StatusNotFound)
 		return
 	}
 
@@ -1653,7 +1653,7 @@ func ResetQuizAttemptsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":        "Quiz unlocked successfully",
+		"message":        "Test unlocked successfully",
 		"unlock_version": unlockVersion,
 	})
 }

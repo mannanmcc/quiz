@@ -31,7 +31,7 @@ export SMTP_HOST="smtp.example.com"
 export SMTP_PORT="587"
 export SMTP_USERNAME="your-smtp-username"
 export SMTP_PASSWORD="your-smtp-password"
-export SMTP_FROM="QUIZ <no-reply@your-domain.example>"
+export SMTP_FROM="TEST <no-reply@your-domain.example>"
 ```
 
 Email sending is disabled unless `EMAIL_SENDING_ENABLED` is set to `true`,
@@ -90,7 +90,7 @@ Run checks with `go test ./...`.
 
 ## Reading passages
 
-On Create/Edit Quiz, use **Reading passage / shared context** to enter one or
+On Create/Edit Test, use **Reading passage / shared context** to enter one or
 more paragraphs and choose the number of related questions. Click **Add passage
 and questions**, fill in those questions and answers, then save the exam. Repeat
 for additional passages. Each question's **Edit Context** button lets you inspect

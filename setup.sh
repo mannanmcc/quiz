@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🎓 Vocabulary Quiz Application Setup"
+echo "🎓 Vocabulary Test Application Setup"
 echo "===================================="
 
 # Check if Go is installed

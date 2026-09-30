@@ -279,7 +279,7 @@ func assignDefaultStage() {
 		log.Fatal("Error assigning default student stage:", err)
 	}
 	if _, err := DB.Exec("UPDATE quizzes SET stage_id = ? WHERE stage_id IS NULL", generalStageID); err != nil {
-		log.Fatal("Error assigning default quiz stage:", err)
+		log.Fatal("Error assigning default test stage:", err)
 	}
 }
 

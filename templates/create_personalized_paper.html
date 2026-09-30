@@ -8,7 +8,7 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 QUIZ - Admin</div>
+        <div class="nav-brand">🎓 TEST - Admin</div>
         <div class="nav-user">
             <a href="/admin/dashboard" class="btn btn-secondary">Back to Dashboard</a>
             <a href="/logout" class="btn btn-secondary">Logout</a>
@@ -18,7 +18,7 @@
     <div class="container">
         <div class="form-shell">
             <h1>Create Personalized Practice Paper</h1>
-            <p class="page-intro">Select a student and one or more quizzes to build a single revision paper from all their incorrect answers.</p>
+            <p class="page-intro">Select a student and one or more tests to build a single revision paper from all their incorrect answers.</p>
 
             <form id="personalizedPracticeForm" class="admin-form">
                 <div class="form-group">
@@ -32,7 +32,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Source Quizzes</label>
+                    <label>Source Tests</label>
                     <div class="checkbox-list" id="quizList">
                         {{range .Quizzes}}
                         <label class="checkbox-item">
@@ -43,7 +43,7 @@
                             </span>
                         </label>
                         {{else}}
-                        <p class="empty-message">No active quizzes are available yet.</p>
+                        <p class="empty-message">No active tests are available yet.</p>
                         {{end}}
                     </div>
                 </div>
@@ -68,6 +68,6 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260823-personalized-paper"></script>
+    <script src="/static/js/app.js?v=20260930-test-wording"></script>
 </body>
 </html>

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Take Quiz</title>
+    <title>Take Test</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260728-mistakes-report">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 QUIZ</div>
+        <div class="nav-brand">🎓 TEST</div>
         <div class="nav-user">
             <a href="/student/dashboard" class="btn btn-secondary">Back to Dashboard</a>
         </div>
@@ -22,7 +22,7 @@
                 
                 <form id="quizForm" novalidate>
                     <div id="questionsContainer"></div>
-                    <button id="submitQuizButton" type="submit" class="btn btn-primary btn-large">Submit Quiz</button>
+                    <button id="submitQuizButton" type="submit" class="btn btn-primary btn-large">Submit Test</button>
                 </form>
             </main>
 
@@ -33,7 +33,7 @@
         </div>
 
         <div id="resultsContainer" style="display: none;">
-            <h1>Quiz Results</h1>
+            <h1>Test Results</h1>
             <div class="results-box">
                 <h2>Your Score: <span id="finalScore"></span></h2>
                 <p id="finalPercentage"></p>
@@ -57,7 +57,7 @@
         console.log('submit endpoint', `/student/api/quiz/${quizId}/submit`);
 
         function showLoadError(message) {
-            document.getElementById('quizTitle').textContent = 'Unable to load quiz';
+            document.getElementById('quizTitle').textContent = 'Unable to load test';
             document.getElementById('quizLoadError').textContent = message;
             document.getElementById('quizForm').style.display = 'none';
             document.getElementById('timerPanel').style.display = 'none';
@@ -213,7 +213,7 @@
                 container.innerHTML = '';
 
                 if (!data.questions || data.questions.length === 0) {
-                    showLoadError('This quiz does not have any questions yet.');
+                    showLoadError('This test does not have any questions yet.');
                     return;
                 }
 
@@ -237,7 +237,7 @@
                     container.appendChild(renderQuestion(q, index));
                 });
             } catch (error) {
-                console.error('Error loading quiz:', error);
+                console.error('Error loading test:', error);
                 showLoadError('Please go back to the dashboard and try again.');
             }
         }
@@ -302,11 +302,11 @@
                 }
                 renderFeedbackReport(result.report);
             } catch (error) {
-                console.error('Error submitting quiz:', error);
+                console.error('Error submitting test:', error);
                 quizSubmitted = false;
                 submitButton.disabled = false;
-                submitButton.textContent = 'Submit Quiz';
-                alert('Failed to submit quiz. Please try again.');
+                submitButton.textContent = 'Submit Test';
+                alert('Failed to submit test. Please try again.');
             }
         }
 

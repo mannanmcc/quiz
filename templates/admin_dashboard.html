@@ -8,11 +8,11 @@
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 QUIZ - Admin</div>
+        <div class="nav-brand">🎓 TEST - Admin</div>
         <div class="nav-user">
             <a href="/admin/student/create" class="btn btn-secondary">Register Student</a>
             <a href="/admin/dashboard#exam-sets" class="btn btn-secondary">Manage Exam Sets</a>
-            <a href="/admin/quiz/create" class="btn btn-primary">Create New Quiz</a>
+            <a href="/admin/quiz/create" class="btn btn-primary">Create New Test</a>
             <a href="/admin/personalized-practice" class="btn btn-secondary">Personalized Paper</a>
             <a href="/logout" class="btn btn-secondary">Logout</a>
         </div>
@@ -35,7 +35,7 @@
         {{end}}
 
         <div class="dashboard-tabs" role="tablist" aria-label="Admin dashboard sections">
-            <a class="dashboard-tab active" href="#quizzes" data-dashboard-tab="quizzes" role="tab">Quizzes</a>
+            <a class="dashboard-tab active" href="#quizzes" data-dashboard-tab="quizzes" role="tab">Tests</a>
             <a class="dashboard-tab" href="#students" data-dashboard-tab="students" role="tab">Students</a>
             <a class="dashboard-tab" href="#exam-types" data-dashboard-tab="exam-types" role="tab">Exam Types</a>
             <a class="dashboard-tab" href="#exam-sets" data-dashboard-tab="exam-sets" role="tab">Exam Sets</a>
@@ -57,12 +57,12 @@
                     {{end}}
                 </div>
             </form>
-            <h2>Live Quizzes</h2>
+            <h2>Live Tests</h2>
             <div class="exam-table-wrap">
                 <table class="exam-table">
                     <thead>
                         <tr>
-                            <th>Exam / Quiz</th>
+                            <th>Exam / Test</th>
                             <th>Description</th>
                             <th>Stage</th>
 							<th>Exam type</th>
@@ -99,7 +99,7 @@
                         </tr>
                         {{else}}
                         <tr>
-                            <td class="empty-message" colspan="9">No live quizzes available.</td>
+                            <td class="empty-message" colspan="9">No live tests available.</td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -109,12 +109,12 @@
 
         {{if .ArchivedQuizzes}}
         <div class="dashboard-section archived-section">
-            <h2>Archived Quizzes</h2>
+            <h2>Archived Tests</h2>
             <div class="exam-table-wrap">
                 <table class="exam-table archived-table">
                     <thead>
                         <tr>
-                            <th>Exam / Quiz</th>
+                            <th>Exam / Test</th>
                             <th>Description</th>
                             <th>Stage</th>
 							<th>Exam type</th>
@@ -182,7 +182,7 @@
                                 <th>Student</th>
                                 <th>Stage</th>
                                 <th>Status</th>
-                                <th>Assigned Quizzes</th>
+                                <th>Assigned Tests</th>
                                 <th>Attempts</th>
                                 <th>Average</th>
                                 <th>Last Attempt</th>
@@ -345,6 +345,6 @@
         </section>
     </div>
 
-    <script src="/static/js/app.js?v=20260927-set-management"></script>
+    <script src="/static/js/app.js?v=20260930-test-wording"></script>
 </body>
 </html>

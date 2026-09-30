@@ -75,13 +75,13 @@ func baseURL(r *http.Request) string {
 }
 
 func sendRegistrationEmail(to, fullName, username string) error {
-	body := fmt.Sprintf("Hello %s,\n\nYour QUIZ account has been created.\n\nUsername: %s\n\nYou can now log in and start your quizzes.\n\nThanks,\nQUIZ", fullName, username)
-	return appemail.Send(to, "Welcome to QUIZ", body)
+	body := fmt.Sprintf("Hello %s,\n\nYour TEST account has been created.\n\nUsername: %s\n\nYou can now log in and start your tests.\n\nThanks,\nTEST", fullName, username)
+	return appemail.Send(to, "Welcome to TEST", body)
 }
 
 func sendPasswordResetEmail(to, fullName, resetLink string) error {
-	body := fmt.Sprintf("Hello %s,\n\nWe received a request to reset your QUIZ password.\n\nUse this link to choose a new password:\n%s\n\nThis link expires in 1 hour. If you did not request this, you can ignore this email.\n\nThanks,\nQUIZ", fullName, resetLink)
-	return appemail.Send(to, "Reset your QUIZ password", body)
+	body := fmt.Sprintf("Hello %s,\n\nWe received a request to reset your TEST password.\n\nUse this link to choose a new password:\n%s\n\nThis link expires in 1 hour. If you did not request this, you can ignore this email.\n\nThanks,\nTEST", fullName, resetLink)
+	return appemail.Send(to, "Reset your TEST password", body)
 }
 
 func renderLoginPage(w http.ResponseWriter, statusCode int, data map[string]interface{}) {

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Quiz</title>
+    <title>Edit Test</title>
     <link rel="stylesheet" href="/static/css/style.css?v=20260628-remove-debug-badge">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">🎓 QUIZ - Admin</div>
+        <div class="nav-brand">🎓 TEST - Admin</div>
         <div class="nav-user">
             <a href="/admin/dashboard" class="btn btn-secondary">Back to Dashboard</a>
             <a href="/logout" class="btn btn-secondary">Logout</a>
@@ -16,18 +16,18 @@
     </nav>
 
     <div class="container">
-        <h1>Edit Quiz</h1>
+        <h1>Edit Test</h1>
 
         <div class="quiz-builder">
             <form id="editQuizForm" onsubmit="submitQuiz(event, {{.QuizID}})">
                 <div class="form-group">
-                    <label>Quiz Title</label>
+                    <label>Test Title</label>
                     <input type="text" name="quiz_title" placeholder="e.g., Vocabulary Test - Level 1" required>
                 </div>
 
                 <div class="form-group">
-                    <label>Quiz Description</label>
-                    <textarea name="quiz_description" rows="3" placeholder="Brief description of the quiz"></textarea>
+                    <label>Test Description</label>
+                    <textarea name="quiz_description" rows="3" placeholder="Brief description of the test"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -93,7 +93,7 @@
                 <div id="questionsContainer"></div>
 
                 <button type="button" class="btn btn-primary" onclick="addQuestion()" style="margin-bottom: 1rem;">Add Question</button>
-                <button type="submit" class="btn btn-primary btn-large">Save Quiz</button>
+                <button type="submit" class="btn btn-primary btn-large">Save Test</button>
             </form>
         </div>
     </div>
@@ -101,6 +101,6 @@
     <script>
         window.editQuizID = {{.QuizID}};
     </script>
-    <script src="/static/js/app.js?v=20260927-question-input-image-paste"></script>
+    <script src="/static/js/app.js?v=20260930-test-wording"></script>
 </body>
 </html>
